@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Recipes</title>
+  <meta name="description" content="My recipe box: search, scale, cook mode, and shopping lists. Works offline.">
+  <meta name="theme-color" content="#FBF8F3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1B1816" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Recipes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    try {
+      var t = JSON.parse(localStorage.getItem('recipeapp.v1') || '{}').theme;
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <main id="app" tabindex="-1"><p class="loading">Loading recipes…</p></main>
+
+  <nav class="tabs" aria-label="Main">
+    <a href="#/" data-tab="home">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM13 4h5.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H13z"/></svg>
+      <span>Recipes</span>
+    </a>
+    <a href="#/shop" data-tab="shop">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>
+      <span>Shopping</span><b class="badge" id="shop-badge" hidden></b>
+    </a>
+    <a href="#/pantry" data-tab="pantry">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v4H7zM6 7h12l-1 14H7z M9 12h6"/></svg>
+      <span>Pantry</span>
+    </a>
+    <a href="#/more" data-tab="more">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+      <span>Backup</span>
+    </a>
+  </nav>
+
+  <div id="cook" class="cook" hidden role="dialog" aria-modal="true" aria-label="Cook mode"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

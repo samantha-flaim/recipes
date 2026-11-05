@@ -1,0 +1,414 @@
+[
+  {
+    "title": "Turkey Sweet Potato Chili",
+    "source_name": "Salt & Lavender",
+    "source_url": "https://www.saltandlavender.com/turkey-sweet-potato-chili/",
+    "author": "Natasha Bull",
+    "description": "A healthy, ultra cozy and comforting one-pot meal featuring lean ground turkey with sweet potatoes in a savory broth.",
+    "prep_time": "10 minutes",
+    "cook_time": "35 minutes",
+    "total_time": "45 minutes",
+    "servings": "6",
+    "ingredients": {
+      "protein": [
+        "1 pound ground turkey"
+      ],
+      "produce": [
+        "½ medium onion, chopped",
+        "4 cloves garlic, minced",
+        "1 pound sweet potatoes, peeled and diced",
+        "Cilantro, for topping (optional)",
+        "Avocado, for topping (optional)",
+        "Scallions, for topping (optional)"
+      ],
+      "shelf": [
+        "1 (28 oz) can fire-roasted diced tomatoes with juices",
+        "1 (14 oz) can red kidney beans, drained",
+        "1 cup chicken broth",
+        "Cheddar cheese, for topping (optional)",
+        "Sour cream or Greek yogurt, for topping (optional)"
+      ],
+      "pantry": [
+        "1 tablespoon olive oil"
+      ],
+      "seasonings": [
+        "½ teaspoon cayenne pepper (optional)",
+        "1 teaspoon paprika",
+        "1 teaspoon ground cumin",
+        "2 tablespoons chili powder",
+        "Salt & pepper to taste"
+      ]
+    },
+    "instructions": [
+      "Heat oil in a soup pot and sauté onion over medium-high heat for 5 minutes until translucent.",
+      "Add garlic and ground turkey; cook 5 minutes, breaking meat apart and stirring occasionally, until turkey turns white.",
+      "Add remaining ingredients (except salt/pepper); stir well.",
+      "Bring to a boil, then reduce heat to medium. Cover with lid slightly open and simmer 15–25 minutes until sweet potatoes soften, stirring occasionally.",
+      "Season with salt and pepper as needed. Serve with desired toppings."
+    ],
+    "nutrition": {
+      "per": "serving",
+      "calories": 280,
+      "protein_g": 18,
+      "carbs_g": 30,
+      "fat_g": 9,
+      "fiber_g": 6,
+      "note": "Excludes optional toppings."
+    },
+    "tags": [
+      "dinner",
+      "high protein",
+      "meal prep"
+    ]
+  },
+  {
+    "title": "Zucchini Sauce Pasta",
+    "source_name": "Personal cookbook (photographed page, p. 121)",
+    "author": null,
+    "description": "Cooked-down zucchini becomes buttery and turns into a simple sauce for pasta with chicken sausage, Parmesan, and pesto.",
+    "prep_time": "10 minutes",
+    "cook_time": "20 minutes",
+    "total_time": "30 minutes",
+    "servings": "6",
+    "ingredients": {
+      "protein": [
+        "Chicken sausage, sliced"
+      ],
+      "produce": [
+        "2 to 3 medium zucchini and/or yellow summer squash (about 1 pound), diced",
+        "4 garlic cloves, finely chopped or grated",
+        "1 cup loosely packed fresh basil, roughly chopped",
+        "Cherry tomatoes, halved"
+      ],
+      "shelf": [
+        "1 pound pasta",
+        "2 tablespoons salted butter",
+        "¼ cup basil pesto",
+        "½ cup freshly grated Parmesan cheese"
+      ],
+      "pantry": [
+        "3 tablespoons extra-virgin olive oil"
+      ],
+      "seasonings": [
+        "Crushed red pepper flakes",
+        "2 teaspoons dried oregano",
+        "Kosher salt and black pepper"
+      ]
+    },
+    "instructions": [
+      "Boil the pasta until al dente.",
+      "Cook the chicken sausage in a skillet until browned; set aside.",
+      "Cook the zucchini in a skillet, seasoned with salt and pepper, until softened.",
+      "Stir in the butter (2 tablespoons), garlic (4 cloves), oregano, and a pinch of red pepper flakes. Cook 1 to 2 minutes, until fragrant.",
+      "Add the pasta, chicken sausage, Parmesan, pesto, and cherry tomatoes.",
+      "Stir in the basil off heat until wilted."
+    ],
+    "nutrition": {
+      "per": "serving",
+      "calories": 535,
+      "protein_g": 25,
+      "carbs_g": 62,
+      "fat_g": 20,
+      "fiber_g": 4,
+      "note": null
+    },
+    "tags": [
+      "dinner",
+      "under 30 min",
+      "high protein"
+    ]
+  },
+  {
+    "title": "Vanilla Bean Ninja Creami Ice Cream",
+    "source_name": null,
+    "source_url": null,
+    "author": null,
+    "description": "A protein-packed vanilla bean ice cream base for the Ninja Creami.",
+    "prep_time": "5 minutes",
+    "cook_time": "24 hours (freeze) + spin",
+    "total_time": null,
+    "servings": "1 pint",
+    "ingredients": [
+      "1 scoop hemp protein powder",
+      "7g jello",
+      "1.5 cups nut milk (almond-cashew-macadamia blend)",
+      "1 to 1.5 servings vanilla bean extract",
+      "Pinch of salt"
+    ],
+    "instructions": [
+      "Whisk the milk, jello powder, vanilla bean extract, protein powder, and salt together until fully combined and no lumps remain.",
+      "Pour the mixture into the Ninja Creami pint container, up to the max fill line.",
+      "Freeze the pint, uncovered and on a level surface, for at least 24 hours.",
+      "Place the frozen pint into the Creami outer bowl, lock it into the machine, and run the Ice Cream program.",
+      "If the texture comes out crumbly, run the Re-spin function until smooth."
+    ],
+    "nutrition": {
+      "per": "pint (entire recipe)",
+      "calories": 210,
+      "protein_g": 10,
+      "carbs_g": 25,
+      "fat_g": 6,
+      "fiber_g": 0,
+      "note": "Protein is modest because hemp protein powder is much lower in protein per scoop than whey."
+    },
+    "tags": [
+      "dessert",
+      "ninja creami"
+    ]
+  },
+  {
+    "title": "Strawberry Chia Pudding",
+    "source_name": null,
+    "source_url": null,
+    "author": null,
+    "description": "A blended strawberry chia pudding, sweetened only by the strawberries, that chills into a thick, creamy texture.",
+    "prep_time": "5 minutes",
+    "cook_time": "Chill at least 4 hours (or overnight)",
+    "total_time": null,
+    "servings": "2",
+    "ingredients": {
+      "protein": [],
+      "produce": [
+        "200 g strawberries"
+      ],
+      "shelf": [
+        "40 g nut milk",
+        "60 g Greek yogurt",
+        "35 g chia seeds"
+      ],
+      "seasonings": [
+        "Pinch of salt"
+      ],
+      "pantry": []
+    },
+    "instructions": [
+      "Blend the strawberries, nut milk, Greek yogurt, and salt until smooth.",
+      "Stir in the chia seeds until evenly distributed.",
+      "Divide between two containers, cover, and refrigerate at least 4 hours (or overnight) until thickened and creamy, stirring once after the first hour to prevent clumping.",
+      "Stir before serving; loosen with a splash of nut milk only if it's thicker than you'd like — this version is meant to set up firmer than a thin, runny pudding."
+    ],
+    "nutrition": {
+      "per": "serving",
+      "calories": 135,
+      "protein_g": 7,
+      "carbs_g": 16,
+      "fat_g": 6,
+      "fiber_g": 8,
+      "note": null
+    },
+    "tags": [
+      "breakfast",
+      "snack"
+    ]
+  },
+  {
+    "title": "Chocolate Chip Energy Bites",
+    "source_name": null,
+    "source_url": null,
+    "author": null,
+    "description": "No-bake date and nut energy bites with PB Fit, hemp hearts, flax, pumpkin seeds, dark chocolate, and freeze-dried raspberry bits.",
+    "prep_time": "15 minutes",
+    "cook_time": null,
+    "total_time": null,
+    "servings": "10 to 12 bites",
+    "ingredients": {
+      "protein": [],
+      "produce": [
+        "100 g pitted Medjool dates (~5 dates)"
+      ],
+      "shelf": [
+        "70 g mixed nuts",
+        "15–20 g pumpkin seeds (pepitas)",
+        "35 g PB Fit",
+        "20 g hemp hearts",
+        "12 g ground flaxseed",
+        "25–30 g dark chocolate chips",
+        "8–10 g freeze-dried raspberries, crumbled",
+        "20 g oat milk, added gradually"
+      ],
+      "seasonings": [
+        "2 g cinnamon",
+        "Pinch of salt"
+      ],
+      "pantry": []
+    },
+    "instructions": [
+      "Pulse the nuts and pumpkin seeds together until finely chopped.",
+      "Add dates, PB Fit, hemp hearts, flax, cinnamon, and salt. Pulse, adding oat milk a little at a time (start with about 15 g), until it just starts clumping together.",
+      "Add a touch more oat milk only if needed — it should still feel like a thick, sticky dough, not wet.",
+      "Stir or briefly pulse in the chocolate chips and crumbled freeze-dried raspberries at the end so you keep little chocolate chunks and raspberry bits.",
+      "Roll into 10 to 12 bites (about 1 tablespoon each) and store in the fridge."
+    ],
+    "nutrition": {
+      "per": "bite",
+      "calories": 120,
+      "protein_g": 4,
+      "carbs_g": 12,
+      "fat_g": 7,
+      "fiber_g": 3,
+      "note": null
+    },
+    "tags": [
+      "snack"
+    ]
+  },
+  {
+    "title": "Peanut Butter Ninja Creami Ice Cream",
+    "source_name": null,
+    "source_url": null,
+    "author": null,
+    "description": "A lean, no-added-sugar peanut butter ice cream base for the Ninja Creami, made with PB Fit and nut milk.",
+    "prep_time": "5 minutes",
+    "cook_time": "24 hours (freeze) + spin",
+    "total_time": null,
+    "servings": "1 pint",
+    "ingredients": {
+      "protein": [],
+      "produce": [],
+      "shelf": [
+        "1.5 cups nut milk",
+        "30–35 g PB Fit",
+        "7 g sugar-free jello powder (vanilla or cheesecake)",
+        "½ teaspoon vanilla extract"
+      ],
+      "seasonings": [
+        "Pinch of salt"
+      ],
+      "pantry": []
+    },
+    "instructions": [
+      "Whisk or blend the nut milk, PB Fit, jello powder, vanilla, and salt until the jello and PB Fit fully dissolve with no lumps.",
+      "Pour the mixture into the Ninja Creami pint container, up to the max fill line.",
+      "Freeze the pint, uncovered and on a level surface, for at least 24 hours.",
+      "Place the frozen pint into the Creami outer bowl, lock it into the machine, and run the Lite Ice Cream program.",
+      "If the texture comes out crumbly, add 1–2 tablespoons nut milk and re-spin until smooth."
+    ],
+    "nutrition": {
+      "per": "pint (entire recipe)",
+      "calories": 205,
+      "protein_g": 13,
+      "carbs_g": 14,
+      "fat_g": 4,
+      "fiber_g": 2,
+      "note": null
+    },
+    "tags": [
+      "dessert",
+      "ninja creami"
+    ]
+  },
+  {
+    "title": "BBQ Salmon Bowls with Mango Avocado Salsa",
+    "source_name": "Pinch of Yum",
+    "source_url": "https://pinchofyum.com/bbq-salmon-mango-salsa",
+    "author": "Lindsay Ostrom",
+    "description": "Smoky-sweet baked salmon over rice, topped with a fresh mango and avocado salsa brightened with lime.",
+    "prep_time": "15 minutes",
+    "cook_time": "10 minutes",
+    "total_time": "25 minutes",
+    "servings": "2–4 (depending on how much salmon)",
+    "ingredients": {
+      "protein": [
+        "1–2 lbs fresh salmon"
+      ],
+      "produce": [
+        "2 mangoes, diced",
+        "1 avocado, diced",
+        "¼ cup minced cilantro",
+        "¼ cup minced red onion",
+        "½ jalapeño, minced (optional)",
+        "2 tablespoons lime juice plus 1 teaspoon lime zest",
+        "Lime wedges, for serving"
+      ],
+      "shelf": [
+        "1½ cups rice",
+        "2 tablespoons brown sugar",
+        "1 teaspoon honey"
+      ],
+      "seasonings": [
+        "2 teaspoons smoked paprika",
+        "½ teaspoon chili powder",
+        "2 teaspoons onion powder",
+        "1 teaspoon garlic powder",
+        "½ teaspoon kosher salt (more for a larger filet), plus salt to taste for the salsa"
+      ],
+      "pantry": [
+        "2 tablespoons olive oil"
+      ]
+    },
+    "instructions": [
+      "Make the salsa: combine the mangoes, avocado, cilantro, red onion, jalapeño, honey, lime juice, lime zest, and salt in a bowl. Taste and adjust.",
+      "Cook the rice according to the package directions.",
+      "Preheat the oven to 475°F and line a baking sheet with foil. (Or broil at 500°F with the rack about 6 inches from the heat, watching closely so the sugar doesn't burn.)",
+      "Mix the brown sugar, smoked paprika, onion powder, garlic powder, chili powder, and salt with the olive oil into a paste. Place the salmon skin-side down on the baking sheet and rub the paste generously over the top. Bake 6–12 minutes, depending on thickness and how well done you like it. It's done when it flakes easily with a knife in the thickest part.",
+      "Assemble: add rice to each bowl, top with flaked salmon, and spoon the salsa over everything. Serve with a lime wedge."
+    ],
+    "nutrition": {
+      "per": "serving",
+      "calories": 845,
+      "protein_g": 41,
+      "carbs_g": 87,
+      "fat_g": 35,
+      "fiber_g": 6,
+      "note": "Assumes 1.5 lbs farmed salmon (about 6 oz per serving), 1½ cups dry white rice, and 4 servings."
+    },
+    "tags": [
+      "dinner",
+      "under 30 min",
+      "high protein"
+    ]
+  },
+  {
+    "title": "Cottage Cheese Egg Bites",
+    "source_name": null,
+    "source_url": null,
+    "author": null,
+    "description": "Blender egg bites made with cottage cheese and nutritional yeast, baked in a muffin tin. Custardy, high in protein, and easy to meal prep.",
+    "prep_time": "5 minutes",
+    "cook_time": "20–25 minutes",
+    "total_time": "30 minutes",
+    "servings": "~20 bites",
+    "ingredients": {
+      "protein": [
+        "12 large eggs"
+      ],
+      "produce": [],
+      "shelf": [
+        "2 cups (450 g) cottage cheese",
+        "½ cup nutritional yeast",
+        "2 tablespoons arrowroot flour",
+        "Oil spray or butter, for greasing the muffin tins"
+      ],
+      "seasonings": [
+        "½ teaspoon smoked paprika",
+        "½ teaspoon onion powder",
+        "1 teaspoon garlic powder",
+        "½ teaspoon black pepper",
+        "1 teaspoon salt"
+      ],
+      "pantry": []
+    },
+    "instructions": [
+      "Preheat the oven to 350°F and grease two muffin tins well (silicone or oil spray works best).",
+      "Blend the eggs, cottage cheese, nutritional yeast, arrowroot flour, smoked paprika, onion powder, garlic powder, pepper, and salt for 20–30 seconds until completely smooth. If your blender is small, blend in two batches.",
+      "Fill each muffin cup about ¼ cup, so about ¾ full. Add toppings if using.",
+      "Bake 20–25 minutes, until puffed and just set in the center. Rotate the tins halfway through if baking both at once.",
+      "Cool 5 minutes before removing from the tins. They'll deflate a little as they cool, which is normal."
+    ],
+    "nutrition": {
+      "per": "bite",
+      "calories": 75,
+      "protein_g": 7.5,
+      "carbs_g": 3,
+      "fat_g": 3.5,
+      "fiber_g": 0.5,
+      "note": "Assumes 2% cottage cheese and makes 20 bites. Excludes toppings."
+    },
+    "tags": [
+      "breakfast",
+      "high protein",
+      "meal prep",
+      "under 30 min"
+    ]
+  }
+]
