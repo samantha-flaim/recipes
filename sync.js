@@ -24,7 +24,7 @@ function stable(v) {
 /**
  * hooks:
  *   getState()            → the app's current state object
- *   onRemote(remote, first) → apply data from Firestore ({recipes, pantry, favorites});
+ *   onRemote(remote, first) → apply data from Firestore ({recipes, cooks, pantry, favorites});
  *                           `first` is true for the first full load after sign-in
  *   onStatus(status)      → {signedIn, email, uid, state: 'signed-out'|'loading'|'synced'|'offline'|'error', error?}
  */
@@ -63,7 +63,7 @@ export function start(hooks) {
 
   function arrived(key, fromCache) {
     got[key] = true;
-    const all = ['recipes', ...META].every((k) => got[k]);
+    const all = ['recipes', 'cooks', ...META].every((k) => got[k]);
     if (!all) return;
     if (!ready) {
       ready = true;
@@ -85,6 +85,16 @@ export function start(hooks) {
       });
       arrived('recipes', snap.metadata.fromCache);
     }, fail));
+    // Each time a recipe was cooked: users/<uid>/cooks/<id>
+    unsubs.push(onSnapshot(collection(db, 'users', uid, 'cooks'), { includeMetadataChanges: true }, (snap) => {
+      for (const path of [...known.keys()]) if (path.startsWith('cooks/')) known.delete(path);
+      remote.cooks = snap.docs.map((d) => {
+        const data = d.data();
+        known.set(`cooks/${d.id}`, stable(data));
+        return { _id: d.id, ...data };
+      });
+      arrived('cooks', snap.metadata.fromCache);
+    }, fail));
     for (const name of META) {
       unsubs.push(onSnapshot(ref(`recipeMeta/${name}`), { includeMetadataChanges: true }, (snap) => {
         const data = snap.exists() ? snap.data() : null;
@@ -104,6 +114,9 @@ export function start(hooks) {
       body._order = i; // keeps the list in the same order on every device
       out.set(`recipes/${r._id}`, body);
     });
+    for (const c of S.cooks || []) {
+      out.set(`cooks/${c._id}`, JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(c).filter(([k]) => k !== '_id')))));
+    }
     out.set('recipeMeta/pantry', { items: [...S.pantry_essentials] });
     out.set('recipeMeta/favorites', { ids: [...S.favorites] });
     return out;
@@ -121,7 +134,7 @@ export function start(hooks) {
       setDoc(ref(path), body).catch(fail);
     }
     for (const path of [...known.keys()]) {
-      if (path.startsWith('recipes/') && !want.has(path)) {
+      if ((path.startsWith('recipes/') || path.startsWith('cooks/')) && !want.has(path)) {
         known.delete(path);
         deleteDoc(ref(path)).catch(fail);
       }

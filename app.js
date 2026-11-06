@@ -25,20 +25,21 @@
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const blankToNull = (s) => (s == null || String(s).trim() === '' ? null : String(s).trim());
+  const clone = (o) => JSON.parse(JSON.stringify(o));
 
   const I = {
     plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
     edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg>',
     heart: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
-    clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
     search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
     x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
     down: '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
-    flame: '<svg viewBox="0 0 24 24"><path d="M12 21c-3.9 0-7-2.7-7-6.5 0-4 4-6 3.5-10.5C12 6 14 9 14 11c1-1 1.5-2.5 1.5-3.5C18 9.5 19 12 19 14.5 19 18.3 15.9 21 12 21z"/></svg>',
     cart: '<svg viewBox="0 0 24 24"><path d="M3 4h2l2.2 11h11L20 8H6.2"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>',
+    flame: '<svg viewBox="0 0 24 24"><path d="M12 21c-3.9 0-7-2.7-7-6.5 0-4 4-6 3.5-10.5C12 6 14 9 14 11c1-1 1.5-2.5 1.5-3.5C18 9.5 19 12 19 14.5 19 18.3 15.9 21 12 21z"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    sparkle: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   };
 
   const store = {
@@ -131,21 +132,15 @@
     return `${p.parts.join(' | ')} per ${p.per}${p.m !== 1 ? ` (${fmtN(f)}× batch)` : ''}`;
   }
 
-  const shortTime = (s) => (s || '').replace(/\bminutes?\b/gi, 'min').replace(/\bhours?\b/gi, 'hr');
-  function cardTime(r) {
-    if (r.total_time) return shortTime(r.total_time);
-    if (r.prep_time) return `${shortTime(r.prep_time)} prep`;
-    return shortTime(r.cook_time);
-  }
 
   /* =========================================================================
      State
      ========================================================================= */
   let S = null;
   let seedError = null;
-  const ui = { q: '', chips: new Set(), scale: {}, draft: null, dirty: false, cook: null };
+  const ui = { q: '', chips: new Set(), scale: {}, draft: null, dirty: false, cook: null, cookRows: null, cookFilter: '', calculating: null, unlocked: null };
 
-  const blankState = () => ({ recipes: [], pantry_essentials: [], favorites: [], theme: 'auto' });
+  const blankState = () => ({ recipes: [], cooks: [], pantry_essentials: [], favorites: [], theme: 'auto' });
 
   function save() {
     if (!store.set(LS_KEY, S)) toast("Couldn't save. Storage is full or blocked in this browser.");
@@ -182,6 +177,9 @@
   }
 
   function applyRemote(remote, first) {
+    // Typing on a cook is saved after a short pause; until then this device is newer than
+    // Firestore. Skip this update: saving sends a fresh one that includes everything.
+    if (!first && saveTimer) return;
     const uidNow = syncStatus.uid;
     const book = store.get(SYNC_KEY) || {};
     const firstForUser = first && book.uid !== uidNow;
@@ -209,11 +207,23 @@
       if (remote.pantry) S.pantry_essentials = [...remote.pantry.items];
     }
 
+    // Cooks follow the same rule as recipes, matched by id.
+    const remoteCooks = (remote.cooks || []).map((c) => ({ ...c }));
+    const remoteCookIds = new Set(remoteCooks.map((c) => c._id));
+    const seenCooks = new Set(book.uid === uidNow ? book.cookIds || [] : []);
+    const localCooks = (S.cooks || []).filter((c) => !remoteCookIds.has(c._id) && (firstForUser || !seenCooks.has(c._id)));
+    if (firstForUser) localCooks.forEach((c) => { c.recipe_id = mapId(c.recipe_id); });
+
     S.recipes = [...remoteRecipes, ...localOnly];
+    S.cooks = [...remoteCooks, ...localCooks];
     if (firstForUser) recategorize(S.recipes);
-    store.set(SYNC_KEY, { uid: uidNow, ids: union(firstForUser ? [] : book.ids, [...remoteIds]) });
+    store.set(SYNC_KEY, {
+      uid: uidNow,
+      ids: union(firstForUser ? [] : book.ids, [...remoteIds]),
+      cookIds: union(firstForUser ? [] : book.cookIds, [...remoteCookIds]),
+    });
     store.set(LS_KEY, S);
-    if (!first && localOnly.length) sync?.push();
+    if (!first && (localOnly.length || localCooks.length)) sync?.push();
     refreshView();
   }
 
@@ -222,8 +232,10 @@
     const [view = '', id] = location.hash.replace(/^#\/?/, '').split('/');
     if (view === 'edit' || view === 'new' || view === 'more') return;
     if (ui.cook) { if (findRecipe(ui.cook.id)) renderCook(); else closeCook(); }
+    const typing = app.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
     if (view === 'r') rerender(() => viewRecipe(decodeURIComponent(id || '')));
-    else if (view === 'pantry') rerender(viewPantry);
+    else if (view === 'cooked') rerender(viewCookedList);
+    else if (view === 'c') { if (!typing) rerender(() => viewCookLog(decodeURIComponent(id || ''))); }
     else if ($('#list')) {
       $('#chips').innerHTML = chipsHtml();
       renderList();
@@ -534,8 +546,10 @@
   function route() {
     const [view = '', id] = location.hash.replace(/^#\/?/, '').split('/');
     if (ui.cook) closeCook();
+    flushSave();
+    ui.cookRows = null;
     document.querySelectorAll('.tabs a').forEach((a) => {
-      const tab = { '': 'home', r: 'home', edit: 'home', new: 'home', pantry: 'pantry', more: 'more' }[view] || 'home';
+      const tab = { '': 'home', r: 'home', edit: 'home', new: 'home', cooked: 'cooked', c: 'cooked', more: 'more' }[view] || 'home';
       a.toggleAttribute('aria-current', false);
       if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
     });
@@ -544,8 +558,9 @@
       case 'r': viewRecipe(decodeURIComponent(id || '')); break;
       case 'edit': viewEdit(decodeURIComponent(id || '')); break;
       case 'new': viewEdit(null); break;
-      case 'pantry': viewPantry(); break;
       case 'more': viewMore(); break;
+      case 'cooked': viewCookedList(); break;
+      case 'c': viewCookLog(decodeURIComponent(id || '')); break;
       default: viewHome();
     }
     window.scrollTo(0, 0);
@@ -626,12 +641,10 @@
 
   function cardHtml(r) {
     const fav = S.favorites.includes(r._id);
-    const time = cardTime(r);
     return `<article class="card">
       <a class="card-link" href="#/r/${encodeURIComponent(r._id)}">
         <h2>${esc(r.title)}</h2>
         <div class="card-line">
-          ${time ? `<span class="card-time">${I.clock}${esc(time)}</span>` : ''}
           ${r.nutrition?.calories != null ? `<span class="card-nut">${esc(cardNutrition(r.nutrition))}</span>` : ''}
           ${(r.tags || []).map((t) => `<span class="tag">${esc(cap(t))}</span>`).join('')}
         </div>
@@ -650,7 +663,6 @@
     const f = ui.scale[id] || 1;
     const fav = S.favorites.includes(id);
     const n = r.nutrition;
-    const times = [['Prep', r.prep_time], ['Cook', r.cook_time], ['Total', r.total_time]].filter(([, v]) => v);
     const safeUrl = /^https?:\/\//i.test(r.source_url || '') ? r.source_url : '';
 
     app.innerHTML = `
@@ -663,10 +675,7 @@
       <article class="detail">
         <h1>${esc(r.title)}</h1>
         ${r.description ? `<p class="desc">${esc(r.description)}</p>` : ''}
-        <p class="meta">
-          ${times.map(([k, v]) => `<span><b>${k}</b>&nbsp;${esc(shortTime(v))}</span>`).join('')}
-          ${r.servings ? `<span><b>Servings</b>&nbsp;${esc(scaleText(r.servings, f))}</span>` : ''}
-        </p>
+        ${r.servings ? `<p class="meta"><span><b>Servings</b>&nbsp;${esc(scaleText(r.servings, f))}</span></p>` : ''}
         ${n && n.calories != null ? `<p class="nut">${esc(nutritionFull(n, f))}</p>` : ''}
         ${n?.note ? `<p class="nut-note">${esc(n.note)}</p>` : ''}
         ${f !== 1 && n && !isWholeRecipe(n.per) && n.calories != null ? `<p class="nut-note">Nutrition is per ${esc(n.per || 'serving')}, so it stays the same when scaling.</p>` : ''}
@@ -677,6 +686,7 @@
           </div>
           <button class="btn primary cook-btn" data-a="cook" data-id="${esc(id)}" ${r.instructions.length ? '' : 'disabled'}>${I.flame}Cook mode</button>
         </div>
+        <button class="btn block log-btn" data-a="cook-start" data-id="${esc(id)}">${I.plus}Log a cook${f !== 1 ? ` (${fmtN(f)}×)` : ''}</button>
 
         <div class="section-h"><h2>Ingredients</h2></div>
         ${ingredientGroups(r).map((g) => `
@@ -686,6 +696,19 @@
 
         <div class="section-h"><h2>Instructions</h2></div>
         <ol class="steps">${(() => { const re = ingredientRegex(r); return r.instructions.map((s) => `<li>${withPills(s, re)}</li>`).join(''); })()}</ol>
+
+        ${(() => {
+          const hist = cooksOf(id);
+          if (!hist.length) return '';
+          return `<div class="section-h"><h2>History</h2></div>
+            <p class="hint">Cooked ${hist.length} time${hist.length === 1 ? '' : 's'} · last ${esc(fmtDate(hist[0].date))}</p>
+            <ul class="history">${hist.map((c) => `<li>
+              <a class="hist-link" href="#/c/${encodeURIComponent(c._id)}">
+                <span class="hist-top"><b>${esc(fmtDate(c.date))}</b>${ratingChip(c.rating)}${c.locked ? '' : '<span class="tag">In progress</span>'}</span>
+                ${c.comment ? `<span class="hist-comment">${esc(c.comment)}</span>` : ''}
+              </a>
+              <button class="btn small" data-a="cook-again" data-id="${esc(c._id)}">Cook again</button></li>`).join('')}</ul>`;
+        })()}
 
         ${safeUrl ? `<p class="source">Source: <a href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(safeUrl)}</a></p>` : ''}
       </article>`;
@@ -709,10 +732,10 @@
     if (el) el.textContent = wakeLock ? 'Screen will stay on' : ('wakeLock' in navigator ? 'Tap a step to keep the screen on' : 'Keep-awake isn’t supported in this browser');
   }
 
-  function openCook(id) {
+  function openCook(id, cookId) {
     const r = findRecipe(id);
     if (!r?.instructions.length) return;
-    ui.cook = { id, step: 0 };
+    ui.cook = { id, step: 0, cookId: cookId || null };
     document.body.classList.add('noscroll');
     $('#cook').hidden = false;
     renderCook();
@@ -740,7 +763,7 @@
       <p class="cook-status" id="cook-status"></p>
       <div class="cook-body" data-a="cook-tap">
         <p class="cook-n">Step ${i + 1} of ${steps.length}</p>
-        <p class="cook-step" aria-live="polite">${withPills(steps[i], ingredientRegex(r))}</p>
+        <p class="cook-step" aria-live="polite">${withPills(steps[i], ingredientRegex((ui.cook.cookId && findCooked(ui.cook.cookId)) || r))}</p>
       </div>
       <div class="cook-nav">
         <button class="btn" data-a="cook-prev" ${i === 0 ? 'disabled' : ''}>Back</button>
@@ -753,6 +776,202 @@
     const n = findRecipe(ui.cook.id).instructions.length;
     const next = Math.min(n - 1, Math.max(0, ui.cook.step + d));
     if (next !== ui.cook.step) { ui.cook.step = next; renderCook(); }
+  }
+
+  /* =========================================================================
+     Cooks: each time a recipe is made — date, servings made, the ingredients
+     as actually used (the recipe isn't changed), nutrition, rating, comment
+     ========================================================================= */
+  const RATINGS = [['bad', 'Bad'], ['neutral', 'Neutral'], ['good', 'Good']];
+  const RATING_LABEL = Object.fromEntries(RATINGS);
+  const findCooked = (id) => S.cooks.find((c) => c._id === id);
+  const byDateDesc = (a, b) => (b.date || '').localeCompare(a.date || '') || (b.created || 0) - (a.created || 0);
+  const cooksOf = (recipeId) => S.cooks.filter((c) => c.recipe_id === recipeId).sort(byDateDesc);
+  const todayIso = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  function fmtDate(iso) {
+    const d = new Date(`${iso}T00:00`);
+    if (!iso || isNaN(d)) return iso || 'No date';
+    const opts = { weekday: 'short', month: 'short', day: 'numeric' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString(undefined, opts);
+  }
+  const ratingChip = (v) => (v ? `<span class="rate-chip ${esc(v)}">${esc(RATING_LABEL[v] || v)}</span>` : '');
+
+  // Ingredients in recipe format (grouped object or flat list) ⇄ editable rows.
+  function ingredientRows(ing) {
+    const rows = [];
+    if (Array.isArray(ing)) ing.forEach((t) => rows.push({ text: t, cat: '' }));
+    else if (ing) groupOrder(ing).forEach((k) => (ing[k] || []).forEach((t) => rows.push({ text: t, cat: k })));
+    return rows;
+  }
+  function rowsToIngredients(rows) {
+    const used = rows.filter((x) => x.text.trim());
+    if (used.every((x) => !x.cat)) return used.map((x) => x.text.trim());
+    const out = { protein: [], produce: [], shelf: [], seasonings: [], pantry: [] };
+    used.forEach((x) => (out[x.cat || 'shelf'] ||= []).push(x.text.trim()));
+    return out;
+  }
+  const ingredientKey = (ing, servings) => JSON.stringify([rowsToIngredients(ingredientRows(ing)), normTitle(servings)]);
+  function scaleIngredients(ing, f) {
+    if (Array.isArray(ing)) return ing.map((t) => scaleText(t, f));
+    return Object.fromEntries(Object.entries(ing || {}).map(([k, v]) => [k, (v || []).map((t) => scaleText(t, f))]));
+  }
+
+  let saveTimer = null;
+  function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = null; save(); }, 600); }
+  function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; save(); } }
+
+  function startCook({ recipe_id, recipe_title, servings, ingredients }) {
+    const c = {
+      recipe_id: recipe_id || null, recipe_title: recipe_title || 'Untitled', date: todayIso(),
+      servings: servings || '', ingredients: clone(ingredients || []), nutrition: null,
+      locked: false, rating: null, comment: '', created: Date.now(), _id: uid(),
+    };
+    S.cooks.push(c);
+    save();
+    location.hash = `#/c/${encodeURIComponent(c._id)}`;
+  }
+
+  function viewCookLog(id) {
+    const c = findCooked(id);
+    if (!c) { app.innerHTML = `<div class="empty"><p>Cook not found.</p><p><a href="#/cooked">Back to Cooked</a></p></div>`; return; }
+    const r = c.recipe_id ? findRecipe(c.recipe_id) : null;
+    document.title = `${c.recipe_title} · ${fmtDate(c.date)}`;
+    if (!c.locked && (!ui.cookRows || ui.cookRows.id !== id)) {
+      const rows = ingredientRows(c.ingredients);
+      ui.cookRows = { id, rows: rows.length ? rows : [{ text: '', cat: 'protein' }] };
+    }
+    const n = c.nutrition;
+    const calculating = ui.calculating === id;
+    const catOptions = (cat) => [['', 'Uncategorized'], ...GROUPS].map(([k, l]) => `<option value="${k}" ${k === cat ? 'selected' : ''}>${l}</option>`).join('');
+
+    const nutritionHtml = n && n.calories != null
+      ? `<p class="nut">${esc(nutritionFull(n, 1))}</p>${n.note ? `<p class="nut-note">${esc(n.note)}</p>` : ''}`
+      : calculating ? '<p class="hint">Calculating nutrition with Claude… (can take up to a minute)</p>'
+      : c.locked ? `<button class="btn block add-row" data-a="cook-nutrition" data-id="${esc(id)}">${I.sparkle}Calculate nutrition</button>`
+      : '<p class="hint">Calculated when you lock in the ingredients.</p>';
+
+    const ingredientsHtml = c.locked
+      ? `${ingredientGroups({ ingredients: c.ingredients }).map((g) => `
+          ${g.label ? `<h3 class="sub">${esc(g.label)}</h3>` : ''}
+          <ul class="ing-list">${g.items.map((it) => `<li>${esc(it.text)}</li>`).join('')}</ul>`).join('') || '<p class="hint">No ingredients.</p>'}
+         <button class="btn block add-row" data-a="cook-unlock" data-id="${esc(id)}">${I.edit}Edit ingredients</button>`
+      : `<p class="hint">Change anything you swapped or adjusted. The recipe itself isn't changed.</p>
+         <div class="form">
+         ${ui.cookRows.rows.map((it, i) => `<div class="row-item">
+            <label for="ci-${i}" class="sr-only">Ingredient ${i + 1}</label>
+            <input id="ci-${i}" data-cing="${i}" value="${esc(it.text)}" placeholder="e.g. 1 pound ground turkey">
+            <div class="ctrl">
+              <select id="ci-cat-${i}" data-cing-cat="${i}" aria-label="Group for ingredient ${i + 1}">${catOptions(it.cat)}</select>
+              <button type="button" class="icon-btn" data-a="cing-del" data-i="${i}" aria-label="Remove ingredient ${i + 1}">${I.x}</button>
+            </div></div>`).join('')}
+         </div>
+         <button type="button" class="btn block add-row" data-a="cing-add">${I.plus}Add ingredient</button>
+         <button type="button" class="btn primary block add-row" data-a="cook-lock" data-id="${esc(id)}" ${calculating ? 'disabled' : ''}>${I.check}Lock in ingredients</button>
+         <p class="hint">Locking saves the list and calculates nutrition.</p>`;
+
+    app.innerHTML = `
+      <header class="top">
+        <a class="icon-btn" href="#/cooked" aria-label="Back to Cooked">${I.back}</a>
+        <span class="spacer"></span>
+        ${r?.instructions.length ? `<button class="btn small cook-btn" data-a="cook" data-id="${esc(r._id)}" data-cook="${esc(id)}">${I.flame}Cook mode</button>` : ''}
+      </header>
+      <article class="detail">
+        <p class="eyebrow">Cooked</p>
+        <h1>${r ? `<a class="title-link" href="#/r/${encodeURIComponent(r._id)}">${esc(c.recipe_title)}</a>` : esc(c.recipe_title)}</h1>
+        <div class="form">
+          <div class="grid2">
+            <div><label for="c-date">Date</label><input id="c-date" type="date" data-cf="date" value="${esc(c.date)}"></div>
+            <div><label for="c-servings">Servings made</label><input id="c-servings" data-cf="servings" value="${esc(c.servings)}"></div>
+          </div>
+          <span class="field-lbl">Rating</span>
+          <div class="seg rating" role="group" aria-label="Rating">
+            ${RATINGS.map(([v, l]) => `<button type="button" data-a="rate" data-id="${esc(id)}" data-v="${v}" aria-pressed="${c.rating === v}">${l}</button>`).join('')}
+          </div>
+          <label for="c-comment">Comments</label>
+          <textarea id="c-comment" data-cf="comment" placeholder="What worked, what to change next time…">${esc(c.comment || '')}</textarea>
+        </div>
+
+        <div class="section-h"><h2>Nutrition</h2></div>
+        ${nutritionHtml}
+
+        <div class="section-h"><h2>Ingredients</h2></div>
+        ${ingredientsHtml}
+
+        <div class="stack cook-actions">
+          <button class="btn" data-a="cook-again" data-id="${esc(id)}">${I.plus}Cook again</button>
+          ${r ? `<button class="btn" data-a="cook-to-recipe" data-id="${esc(id)}">Use these ingredients in the recipe</button>` : ''}
+          <button class="btn danger" data-a="cook-delete" data-id="${esc(id)}">Delete this cook</button>
+        </div>
+      </article>`;
+  }
+
+  function cookCardHtml(c) {
+    const n = c.nutrition;
+    return `<article class="card">
+      <a class="card-link" href="#/c/${encodeURIComponent(c._id)}">
+        <h2>${esc(c.recipe_title)}</h2>
+        <div class="card-line">
+          <span class="card-date">${esc(fmtDate(c.date))}</span>
+          ${ratingChip(c.rating)}
+          ${c.locked ? '' : '<span class="tag">In progress</span>'}
+          ${n?.calories != null ? `<span class="card-nut">${esc(cardNutrition(n))}</span>` : ''}
+        </div>
+        ${c.comment ? `<p class="card-comment">${esc(c.comment)}</p>` : ''}
+      </a>
+    </article>`;
+  }
+
+  function viewCookedList() {
+    document.title = 'Cooked';
+    const filter = ui.cookFilter || '';
+    const all = [...S.cooks].sort(byDateDesc);
+    const shown = filter ? all.filter((c) => c.rating === filter) : all;
+    app.innerHTML = `
+      <header class="top"><h1 class="page-title">Cooked</h1></header>
+      ${all.length ? `<div class="chips" role="group" aria-label="Filter by rating">
+        ${[['', 'All'], ...RATINGS].map(([v, l]) => `<button class="chip" data-a="cook-filter" data-v="${v}" aria-pressed="${filter === v}">${l}</button>`).join('')}
+      </div>` : ''}
+      ${shown.length ? `<div class="cards">${shown.map(cookCardHtml).join('')}</div>`
+        : all.length ? '<div class="empty"><p>No cooks with that rating.</p></div>'
+        : '<div class="empty"><p class="big">Nothing cooked yet.</p><p>Open a recipe and tap <b>Log a cook</b>.</p></div>'}`;
+  }
+
+  // Shared by the recipe edit form and the cook screen.
+  async function estimateWithAI(payload) {
+    const key = getAiKey();
+    if (!key) throw new Error('Add your Anthropic API key in Settings to calculate nutrition.');
+    let ai;
+    try { ai = await import('./ai.js'); } catch { throw new Error("Couldn't load the AI helper. Check your connection."); }
+    try { return await ai.estimateNutrition(key, payload); } catch (err) { throw new Error(ai.errorMessage(err)); }
+  }
+  const aiIngredients = (ing) => ingredientRows(ing).filter((x) => x.text.trim()).map((x) => ({ group: GROUP_LABEL[x.cat] || '', text: x.text.trim() }));
+
+  async function calcCookNutrition(c) {
+    const r = c.recipe_id ? findRecipe(c.recipe_id) : null;
+    ui.calculating = c._id;
+    refreshCookView(c._id);
+    try {
+      const n = await estimateWithAI({
+        title: c.recipe_title, servings: c.servings, per: r?.nutrition?.per || '',
+        ingredients: aiIngredients(c.ingredients), instructions: r?.instructions || [],
+      });
+      c.nutrition = { per: n.per, calories: n.calories, protein_g: n.protein_g, carbs_g: n.carbs_g, fat_g: n.fat_g, fiber_g: n.fiber_g, note: n.note || null };
+      save();
+      toast('Nutrition calculated by Claude');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      ui.calculating = null;
+      refreshCookView(c._id);
+    }
+  }
+  function refreshCookView(id) {
+    const [view, cur] = location.hash.replace(/^#\/?/, '').split('/');
+    if (view === 'c' && decodeURIComponent(cur || '') === id) rerender(() => viewCookLog(id));
   }
 
   /* =========================================================================
@@ -814,13 +1033,8 @@
         ${field('title', 'Title', 'required autocomplete="off"')}
         <label for="f-description">Description</label>
         <textarea id="f-description" data-f="description">${esc(d.description)}</textarea>
-        <div class="grid3">
-          <div>${field('prep_time', 'Prep')}</div>
-          <div>${field('cook_time', 'Cook')}</div>
-          <div>${field('total_time', 'Total')}</div>
-        </div>
         ${field('servings', 'Servings')}
-        ${field('tags', 'Tags (comma separated)', 'placeholder="dinner, high protein, under 30 min" autocapitalize="none"')}
+        ${field('tags', 'Tags (comma separated)', 'placeholder="dinner, high protein, snack" autocapitalize="none"')}
 
         <section class="fieldset">
           <h2>Ingredients</h2>
@@ -851,6 +1065,8 @@
 
         <section class="fieldset">
           <h2>Nutrition</h2>
+          <button type="button" class="btn block add-row" data-a="ai-nutrition">${I.sparkle}Calculate with AI</button>
+          <p class="hint">Claude estimates from the ingredients and servings above. Check the numbers before saving.</p>
           <label for="n-per">Per</label>
           <input id="n-per" data-f="nut.per" value="${esc(d.nut.per)}" placeholder="serving, bite, pint (entire recipe)…">
           <p class="hint">Include “entire recipe” if the numbers are for the whole batch, so scaling updates them.</p>
@@ -927,25 +1143,33 @@
   }
 
   /* =========================================================================
-     Pantry essentials
+     AI nutrition (see ai.js). The Anthropic API key is the user's own and is kept
+     in this device's storage only: never in recipes.json, Firebase, or the repo.
      ========================================================================= */
-  function viewPantry() {
-    document.title = 'Pantry Essentials';
-    const usage = (p) => S.recipes.filter((r) => allIngredientText(r).some((t) => pantryRe(p).test(t))).length;
-    app.innerHTML = `
-      <header class="top"><h1 class="page-title">Pantry Essentials</h1></header>
-      <p class="meta" style="display:block">Things you always keep on hand. When you add one, matching ingredients in every recipe move into the <b>Pantry Essentials</b> group.</p>
-      <form class="inline-form" id="pantry-form">
-        <label for="pantry-input" class="sr-only">Pantry item</label>
-        <input id="pantry-input" placeholder="e.g. butter, kosher salt" autocomplete="off" autocapitalize="none">
-        <button class="btn primary" type="submit">Add</button>
-      </form>
-      ${S.pantry_essentials.length ? `<ul class="plain">${S.pantry_essentials.map((p, i) => {
-        const n = usage(p);
-        return `<li><span class="grow">${esc(cap(p))}<small>${n ? `In ${n} recipe${n === 1 ? '' : 's'}` : 'Not in any recipe yet'}</small></span>
-          <button class="icon-btn" data-a="pantry-del" data-i="${i}" aria-label="Remove ${esc(p)}">${I.x}</button></li>`;
-      }).join('')}</ul>` : '<div class="empty"><p>No pantry essentials yet.</p></div>'}
-      <p class="hint" style="margin-top:12px">Removing an item doesn't move ingredients back out of the pantry group. Edit a recipe to change an ingredient's group.</p>`;
+  const AI_KEY = 'recipeapp.anthropicKey';
+  const getAiKey = () => { try { return localStorage.getItem(AI_KEY) || ''; } catch { return ''; } };
+  const setAiKey = (k) => { try { k ? localStorage.setItem(AI_KEY, k) : localStorage.removeItem(AI_KEY); return true; } catch { return false; } };
+
+  function aiPanelHtml() {
+    const key = getAiKey();
+    const body = key
+      ? `<p class="sync-line ok">API key saved on this device (ends in …${esc(key.slice(-4))})</p>
+         <button class="btn block add-row" data-a="ai-key-remove">Remove key</button>`
+      : `<form class="form" id="ai-key-form" novalidate>
+           <label for="ai-key">Anthropic API key</label>
+           <input id="ai-key" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="sk-ant-…">
+           <button class="btn primary block add-row" type="submit">Save key</button>
+         </form>`;
+    return `<section class="panel" id="ai-panel"><h2>AI nutrition</h2>
+      <p>Lets <b>Calculate with AI</b> on the edit screen fill in nutrition facts. The key is saved on this device only and sent only to Anthropic.</p>
+      ${body}
+      <p class="hint">Get a key at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> and set a monthly spend limit there. Each calculation costs about 5–7¢.</p>
+    </section>`;
+  }
+
+  function renderAiPanel() {
+    const panel = $('#ai-panel');
+    if (panel) panel.outerHTML = aiPanelHtml();
   }
 
   /* =========================================================================
@@ -956,6 +1180,7 @@
     app.innerHTML = `
       <header class="top"><h1 class="page-title">Settings</h1></header>
       ${syncPanelHtml()}
+      ${aiPanelHtml()}
       <section class="panel">
         <h2>Export</h2>
         <p>Export a copy now and then to keep in Dropbox, or to move recipes without signing in.</p>
@@ -963,7 +1188,7 @@
           <button class="btn primary" data-a="export-backup">Export full backup (.json)</button>
           <button class="btn" data-a="export-recipes">Export recipes.json only</button>
         </div>
-        <p class="hint">Full backup includes recipes, pantry essentials, and favorites. <b>recipes.json only</b> matches the file in your repo, so you can replace it there.</p>
+        <p class="hint">Full backup includes recipes, cooks, pantry essentials, and favorites. <b>recipes.json only</b> matches the file in your repo, so you can replace it there.</p>
       </section>
       <section class="panel">
         <h2>Import</h2>
@@ -1000,12 +1225,13 @@
   }
 
   function importData(data, mode) {
-    let recipes, pantry = null, favTitles = [];
+    let recipes, pantry = null, favTitles = [], cooks = [];
     if (Array.isArray(data)) recipes = data;
     else if (data && Array.isArray(data.recipes)) {
       recipes = data.recipes;
       if (Array.isArray(data.pantry_essentials)) pantry = data.pantry_essentials;
       if (Array.isArray(data.favorites)) favTitles = data.favorites;
+      if (Array.isArray(data.cooks)) cooks = data.cooks;
     } else throw new Error('Expected a list of recipes or a backup file.');
     recipes = recipes.filter((r) => r && typeof r === 'object' && r.title);
     if (!recipes.length) throw new Error('No recipes with a title were found.');
@@ -1030,6 +1256,11 @@
     for (const t of favTitles) {
       const r = S.recipes.find((x) => x.title === t);
       if (r && !S.favorites.includes(r._id)) S.favorites.push(r._id);
+    }
+    for (const { id, ...c } of cooks) {
+      if (!c || typeof c !== 'object' || S.cooks.some((x) => x._id === id)) continue;
+      const r = S.recipes.find((x) => normTitle(x.title) === normTitle(c.recipe_title));
+      S.cooks.push({ ...c, _id: id || uid(), recipe_id: r ? r._id : c.recipe_id || null });
     }
     S.pantry_essentials = S.pantry_essentials.map((p) => String(p).trim().toLowerCase()).filter(Boolean);
     recategorize(S.recipes);
@@ -1069,18 +1300,6 @@
       ui.scale[el.dataset.id] = +el.dataset.s;
       rerender(() => viewRecipe(el.dataset.id));
     },
-    cook(el) { openCook(el.dataset.id); },
-    'cook-close'() { closeCook(); },
-    'cook-next'() { cookGo(1); },
-    'cook-prev'() { cookGo(-1); },
-    'cook-tap'() { if (!wakeLock) requestWake(); },
-    'pantry-del'(el) {
-      const p = S.pantry_essentials[+el.dataset.i];
-      S.pantry_essentials.splice(+el.dataset.i, 1);
-      save();
-      toast(`Removed ${p}`);
-      viewPantry();
-    },
     'ing-add'() {
       const last = ui.draft.ing[ui.draft.ing.length - 1];
       ui.draft.ing.push({ text: '', cat: last ? last.cat : 'protein' });
@@ -1109,9 +1328,6 @@
       if (p.title && !d.title) d.title = p.title;
       if (p.description && !d.description) d.description = p.description;
       if (p.servings) d.servings = p.servings;
-      if (p.prep) d.prep_time = p.prep;
-      if (p.cook) d.cook_time = p.cook;
-      if (p.total) d.total_time = p.total;
       if (p.ing.length) d.ing = p.ing;
       if (p.steps.length) d.steps = p.steps;
       ui.dirty = true;
@@ -1141,6 +1357,7 @@
         recipes: S.recipes.map(cleanRecipe),
         pantry_essentials: S.pantry_essentials,
         favorites: S.recipes.filter((r) => S.favorites.includes(r._id)).map((r) => r.title),
+        cooks: S.cooks.map(({ _id, ...c }) => ({ id: _id, ...c })),
       });
     },
     'export-recipes'() { download('recipes.json', S.recipes.map(cleanRecipe)); },
@@ -1149,6 +1366,127 @@
       input.dataset.mode = el.dataset.mode;
       input.value = '';
       input.click();
+    },
+    async 'ai-nutrition'(el) {
+      if (!getAiKey()) { toast('Add your Anthropic API key in Settings first'); return; }
+      const d = ui.draft;
+      const ingredients = d.ing.filter((x) => x.text.trim()).map((x) => ({ group: GROUP_LABEL[x.cat] || '', text: x.text.trim() }));
+      if (!ingredients.length) { toast('Add ingredients first'); return; }
+      const label = el.innerHTML;
+      el.disabled = true;
+      el.textContent = 'Calculating… (can take up to a minute)';
+      try {
+        const n = await estimateWithAI({
+          title: d.title, servings: d.servings, per: d.nut.per, ingredients,
+          instructions: d.steps.map((s) => s.trim()).filter(Boolean),
+        });
+        if (ui.draft !== d) return; // left the form while waiting
+        Object.assign(d.nut, {
+          per: n.per, calories: String(n.calories), protein_g: String(n.protein_g), carbs_g: String(n.carbs_g),
+          fat_g: String(n.fat_g), fiber_g: String(n.fiber_g), note: n.note,
+        });
+        ui.dirty = true;
+        rerender(renderEdit);
+        toast('Filled in by Claude. Check the numbers, then save.');
+      } catch (err) {
+        toast(err.message);
+        el.disabled = false;
+        el.innerHTML = label;
+      }
+    },
+    'cook-start'(el) {
+      const r = findRecipe(el.dataset.id);
+      const f = ui.scale[r._id] || 1;
+      startCook({ recipe_id: r._id, recipe_title: r.title, servings: scaleText(r.servings || '', f), ingredients: scaleIngredients(r.ingredients, f) });
+    },
+    'cook-again'(el) {
+      const c = findCooked(el.dataset.id);
+      const r = c.recipe_id ? findRecipe(c.recipe_id) : null;
+      startCook({ recipe_id: c.recipe_id, recipe_title: r ? r.title : c.recipe_title, servings: c.servings, ingredients: c.ingredients });
+    },
+    rate(el) {
+      const c = findCooked(el.dataset.id);
+      c.rating = c.rating === el.dataset.v ? null : el.dataset.v;
+      save();
+      el.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === c.rating));
+    },
+    'cing-add'() {
+      const rows = ui.cookRows.rows;
+      rows.push({ text: '', cat: rows.length ? rows[rows.length - 1].cat : 'protein' });
+      const id = ui.cookRows.id;
+      rerender(() => viewCookLog(id));
+      $(`#ci-${rows.length - 1}`)?.focus();
+    },
+    'cing-del'(el) {
+      const id = ui.cookRows.id;
+      ui.cookRows.rows.splice(+el.dataset.i, 1);
+      findCooked(id).ingredients = rowsToIngredients(ui.cookRows.rows);
+      save();
+      rerender(() => viewCookLog(id));
+    },
+    'cook-unlock'(el) {
+      const c = findCooked(el.dataset.id);
+      ui.unlocked = { id: c._id, key: ingredientKey(c.ingredients, c.servings) };
+      c.locked = false;
+      save();
+      rerender(() => viewCookLog(c._id));
+    },
+    async 'cook-lock'(el) {
+      const c = findCooked(el.dataset.id);
+      if (ui.cookRows?.id === c._id) c.ingredients = rowsToIngredients(ui.cookRows.rows);
+      if (!ingredientRows(c.ingredients).length) { toast('Add at least one ingredient'); return; }
+      const key = ingredientKey(c.ingredients, c.servings);
+      const r = c.recipe_id ? findRecipe(c.recipe_id) : null;
+      c.locked = true;
+      ui.cookRows = null;
+      // No AI call when nothing changed: reuse what's already known.
+      if (c.nutrition?.calories != null && ui.unlocked?.id === c._id && ui.unlocked.key === key) {
+        ui.unlocked = null; save(); rerender(() => viewCookLog(c._id)); toast('Ingredients locked'); return;
+      }
+      ui.unlocked = null;
+      if (r?.nutrition?.calories != null && ingredientKey(r.ingredients, r.servings) === key) {
+        c.nutrition = clone(r.nutrition);
+        save(); rerender(() => viewCookLog(c._id));
+        toast('Locked. Same as the recipe, so its nutrition was copied.');
+        return;
+      }
+      c.nutrition = null;
+      save();
+      rerender(() => viewCookLog(c._id));
+      if (!getAiKey()) { toast('Locked. Add an Anthropic API key in Settings to calculate nutrition.'); return; }
+      await calcCookNutrition(c);
+    },
+    'cook-nutrition'(el) { calcCookNutrition(findCooked(el.dataset.id)); },
+    'cook-to-recipe'(el) {
+      const c = findCooked(el.dataset.id);
+      const r = findRecipe(c.recipe_id);
+      if (!r || !confirm(`Replace the ingredients and servings in “${r.title}” with this cook's? Past cooks keep their own copies.`)) return;
+      r.ingredients = clone(c.ingredients);
+      r.servings = c.servings || r.servings;
+      if (c.nutrition?.calories != null) r.nutrition = clone(c.nutrition);
+      recategorize([r]);
+      save();
+      toast('Recipe updated');
+      location.hash = `#/r/${encodeURIComponent(r._id)}`;
+    },
+    'cook-delete'(el) {
+      const c = findCooked(el.dataset.id);
+      if (!confirm(`Delete this cook of “${c.recipe_title}” from ${fmtDate(c.date)}?`)) return;
+      S.cooks = S.cooks.filter((x) => x._id !== c._id);
+      save();
+      toast('Cook deleted');
+      location.hash = '#/cooked';
+    },
+    'cook-filter'(el) { ui.cookFilter = el.dataset.v; viewCookedList(); },
+    cook(el) { openCook(el.dataset.id, el.dataset.cook); },
+    'cook-close'() { closeCook(); },
+    'cook-next'() { cookGo(1); },
+    'cook-prev'() { cookGo(-1); },
+    'cook-tap'() { if (!wakeLock) requestWake(); },
+    'ai-key-remove'() {
+      setAiKey('');
+      toast('API key removed from this device');
+      renderAiPanel();
     },
     async 'sign-out'() {
       try { await sync?.signOut(); toast('Signed out. Recipes stay on this device.'); } catch { toast("Couldn't sign out. Try again."); }
@@ -1169,6 +1507,17 @@
   document.addEventListener('input', (e) => {
     const t = e.target;
     if (t.id === 'q') { ui.q = t.value; renderList(); return; }
+    if (t.dataset.cf) {
+      const c = findCooked(location.hash.split('/')[2] ? decodeURIComponent(location.hash.split('/')[2]) : '');
+      if (c) { c[t.dataset.cf] = t.value; saveSoon(); }
+      return;
+    }
+    if (t.dataset.cing != null && ui.cookRows) {
+      ui.cookRows.rows[+t.dataset.cing].text = t.value;
+      findCooked(ui.cookRows.id).ingredients = rowsToIngredients(ui.cookRows.rows);
+      saveSoon();
+      return;
+    }
     if (!ui.draft) return;
     if (t.dataset.f) setDraftField(t.dataset.f, t.value);
     else if (t.dataset.ing != null) { ui.draft.ing[+t.dataset.ing].text = t.value; ui.dirty = true; }
@@ -1177,6 +1526,12 @@
 
   document.addEventListener('change', (e) => {
     const t = e.target;
+    if (t.dataset.cingCat != null && ui.cookRows) {
+      ui.cookRows.rows[+t.dataset.cingCat].cat = t.value;
+      findCooked(ui.cookRows.id).ingredients = rowsToIngredients(ui.cookRows.rows);
+      save();
+      return;
+    }
     if (t.dataset.ingCat != null && ui.draft) { ui.draft.ing[+t.dataset.ingCat].cat = t.value; ui.dirty = true; return; }
     if (t.id === 'import-file' && t.files[0]) {
       const mode = t.dataset.mode;
@@ -1194,6 +1549,16 @@
   document.addEventListener('submit', (e) => {
     e.preventDefault();
     if (e.target.id === 'edit-form') saveDraft();
+    if (e.target.id === 'ai-key-form') {
+      const input = $('#ai-key');
+      const key = input.value.trim();
+      if (!key) { toast('Paste your API key first'); return; }
+      if (!key.startsWith('sk-ant-')) { toast('That doesn’t look like an Anthropic API key (they start with sk-ant-)'); return; }
+      if (!setAiKey(key)) { toast("Couldn't save the key. Storage is blocked in this browser."); return; }
+      input.value = '';
+      toast('API key saved on this device');
+      renderAiPanel();
+    }
     if (e.target.id === 'sync-form') {
       const email = $('#sync-email').value.trim();
       const pw = $('#sync-password').value;
@@ -1204,18 +1569,6 @@
       sync.signIn(email, pw)
         .then(() => { document.activeElement?.blur(); toast('Signed in. Syncing your recipes…'); renderSyncUI(); })
         .catch((err) => { toast(authMessage(err)); btn.disabled = false; btn.textContent = 'Sign in'; });
-    }
-    if (e.target.id === 'pantry-form') {
-      const input = $('#pantry-input');
-      const item = input.value.trim().toLowerCase();
-      if (!item) return;
-      if (S.pantry_essentials.includes(item)) { toast(`${cap(item)} is already on the list`); return; }
-      S.pantry_essentials.push(item);
-      const { moved, recipes } = recategorize(S.recipes, [item]);
-      save();
-      toast(moved ? `Moved ${moved} ingredient${moved === 1 ? '' : 's'} in ${recipes} recipe${recipes === 1 ? '' : 's'} to Pantry Essentials` : `Added ${item}`);
-      viewPantry();
-      $('#pantry-input')?.focus();
     }
   });
 

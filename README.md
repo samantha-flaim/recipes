@@ -4,26 +4,28 @@ A recipe box web app you can install on your phone's home screen. It's plain HTM
 
 - **Recipes:** search by title or ingredient, filter by tag or favorites
 - **Recipe page:** ingredients grouped Protein → Produce → Shelf → Seasonings → Pantry Essentials. Scale to ½×, 1×, 2×, or 3×. Ingredient names in the steps are highlighted.
-- **Cook mode:** big text, one step at a time, screen kept on
-- **Pantry Essentials:** things you always have on hand. Adding one moves matching ingredients into that group.
 - **Sync:** sign in once per device and recipes, favorites, and pantry essentials stay the same everywhere
-- **Settings:** sync sign-in, appearance, and JSON export/import to back up or move between devices
+- **Cook mode:** big text, one step at a time with ingredient names highlighted, screen kept on
+- **Cooked:** log each time you make a recipe — date, servings made, the ingredients you actually used, nutrition, a Bad / Neutral / Good rating, and a comment
+- **AI nutrition:** "Calculate with AI" on the edit screen asks Claude to estimate nutrition facts
+- **Settings:** sync sign-in, AI key, appearance, and JSON export/import to back up or move between devices
 
 ## Files
 
 | File | What it is |
 |---|---|
 | `recipes.json` | Your recipes, the source of truth. The app loads it the first time it opens. |
-| `pantry_essentials.json` | Starting pantry list (`["olive oil"]`) |
+| `pantry_essentials.json` | Pantry list (`["olive oil"]`); flat ingredient lists show matching items under Pantry Essentials. There's no screen to edit it. |
 | `index.html`, `styles.css`, `app.js` | The app |
+| `ai.js` | Nutrition estimates with Claude (loaded only when you tap Calculate with AI) |
 | `sync.js`, `firebase-config.js` | Sync through Firebase (same project and login as the Card Deals tracker) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and home-screen install |
 
 ## How data works
 
-The first time the app opens on a device, it copies `recipes.json` and `pantry_essentials.json` into the browser's storage (localStorage). Every add, edit, favorite, and checkbox is saved there, so the app works offline.
+The first time the app opens on a device, it copies `recipes.json` and `pantry_essentials.json` into the browser's storage (localStorage). Every add, edit, and favorite is saved there, so the app works offline.
 
-**Sync:** on the Settings tab, sign in with your Card Deals email and password. The app then keeps recipes, favorites, and pantry essentials in Firebase under your account (`users/<your id>/recipes` and `users/<your id>/recipeMeta`) and mirrors them on every signed-in device. Changes made offline sync when the device reconnects. The light/dark setting stays per device.
+**Sync:** on the Settings tab, sign in with your Card Deals email and password. The app then keeps recipes, cooks, favorites, and pantry essentials in Firebase under your account (`users/<your id>/recipes`, `users/<your id>/cooks`, and `users/<your id>/recipeMeta`) and mirrors them on every signed-in device. Changes made offline sync when the device reconnects. The light/dark setting stays per device.
 
 The first time you sign in on a device, anything only on that device (by title) is added to your account, so nothing is lost. After that, your account wins: a recipe deleted on one device disappears from the others.
 
@@ -46,6 +48,26 @@ If the Settings tab says Firebase refused to save recipes, paste that into Fireb
 - **Update the repo copy:** Settings tab → **Export recipes.json only**. Replace `recipes.json` in the repo with that file and push.
 
 > If you're not signed in, clearing Safari's website data deletes the on-device copy, so export a backup now and then.
+
+## Cooked
+
+On a recipe, **Log a cook** starts an entry with today's date and a copy of the recipe's ingredients and servings (at the current scale). Change anything you swapped, then **Lock in ingredients**:
+
+- If nothing changed from the recipe and the recipe has nutrition, those numbers are copied (no AI call).
+- Otherwise Claude calculates nutrition for what you actually made (needs the API key below).
+
+Rate it Bad / Neutral / Good and add a comment any time. Each cook has **Cook again** (start a new cook from that one), **Use these ingredients in the recipe** (replace the recipe's ingredients, servings, and nutrition with this cook's), and **Delete**. The recipe page lists its cooks under **History**. Cooks sync through Firebase at `users/<your id>/cooks`.
+
+## AI nutrition
+
+On the edit screen, **Calculate with AI** sends the recipe's title, servings, ingredients, and steps to Claude (`claude-opus-5-5`) and fills in calories, protein, carbs, fat, fiber, "per", and a one-line note on its assumptions. Check the numbers, then save.
+
+It uses your own Anthropic API key:
+
+1. Create a key at https://console.anthropic.com (API Keys) and set a monthly spend limit under Billing.
+2. In the app: Settings tab → **AI nutrition** → paste the key → **Save key**. Do this once per device.
+
+The key is stored only in that device's browser storage. It's never put in `recipes.json`, Firebase, or this repo, and the app sends it only to Anthropic. Each calculation costs roughly 5–7¢. **Remove key** in Settings deletes it from the device.
 
 ## Adding a recipe
 
@@ -82,6 +104,7 @@ If the Settings tab says Firebase refused to save recipes, paste that into Fireb
 ```
 
 Notes:
+- `prep_time`, `cook_time`, and `total_time` can stay in the file, but the app doesn't show or edit them.
 - `ingredients` can also be a plain list of strings: `["1 cup milk", "Pinch of salt"]`.
 - Put a number first (`1½ cups`, `15–20 g`, `2 to 3`) so scaling can do the math.
 - If the nutrition numbers are for the whole batch, include "entire recipe" in `per`, for example `"pint (entire recipe)"`. Scaling then multiplies the totals. Per-serving numbers stay the same when scaling.
