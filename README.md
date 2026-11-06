@@ -97,6 +97,8 @@ Then open http://localhost:8000.
 3. On GitHub: **Settings → Pages → Build and deployment → Source: Deploy from a branch**. Pick `main` and `/ (root)`, then **Save**.
 4. After a minute, the app is live at `https://YOUR-USERNAME.github.io/recipes/`.
 
+**This copy is live at https://samantha-flaim.github.io/recipes/** (repo: https://github.com/samantha-flaim/recipes).
+
 ### Option B: Netlify
 
 1. Go to https://app.netlify.com/drop.
