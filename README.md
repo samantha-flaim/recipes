@@ -2,7 +2,7 @@
 
 A recipe box web app you can install on your phone's home screen. It's plain HTML, CSS, and JavaScript with no build step, and it works offline.
 
-- **Recipes:** search by title or ingredient, filter by tag or favorites
+- **Recipes:** grouped by category; search by title or ingredient, filter to favorites
 - **Recipe page:** ingredients grouped Protein → Produce → Shelf → Seasonings → Pantry Essentials. Scale to ½×, 1×, 2×, or 3×. Ingredient names in the steps are highlighted.
 - **Sync:** sign in once per device and recipes, favorites, and pantry essentials stay the same everywhere
 - **Cook mode:** big text, one step at a time with ingredient names highlighted, screen kept on
@@ -78,6 +78,7 @@ The key is stored only in that device's browser storage. It's never put in `reci
 ```json
 {
   "title": "My New Recipe",
+  "category": "lunch/dinner",
   "source_name": null,
   "source_url": null,
   "author": null,
@@ -98,8 +99,7 @@ The key is stored only in that device's browser storage. It's never put in `reci
     "per": "serving",
     "calories": 400, "protein_g": 30, "carbs_g": 40, "fat_g": 12, "fiber_g": 3,
     "note": null
-  },
-  "tags": ["dinner", "under 30 min", "high protein"]
+  }
 }
 ```
 
@@ -108,7 +108,7 @@ Notes:
 - `ingredients` can also be a plain list of strings: `["1 cup milk", "Pinch of salt"]`.
 - Put a number first (`1½ cups`, `15–20 g`, `2 to 3`) so scaling can do the math.
 - If the nutrition numbers are for the whole batch, include "entire recipe" in `per`, for example `"pint (entire recipe)"`. Scaling then multiplies the totals. Per-serving numbers stay the same when scaling.
-- `tags` power the filter chips. The current ones are `under 30 min`, `high protein`, `breakfast`, `dinner`, `snack`, `dessert`, `meal prep`, and `ninja creami`. Any new tag becomes a chip automatically.
+- `category` is one value per recipe and groups the Recipes tab. The current ones are `breakfast`, `lunch/dinner`, `snack`, and `ninja creami`; any new one becomes its own section. (Older files may have a `tags` list; the app turns the first tag into the category and ignores the rest.)
 
 The app only reads `recipes.json` the very first time it opens on a device. To get a recipe you added to the file into the app, import the file: Settings tab → **Import and merge** (it adds new titles and updates matching ones).
 

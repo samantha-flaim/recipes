@@ -307,3 +307,16 @@ details.paste textarea { min-height: 160px; }
 .tag-new .btn { min-height: 40px; }
 .card-cooks { display: inline-flex; align-items: center; gap: 2px; color: var(--title); font-weight: 600; white-space: nowrap; }
 .card-cooks svg { width: 14px; height: 14px; }
+
+/* ---------- Recipe list grouped by category ---------- */
+.cat + .cat { margin-top: 18px; }
+.cat-h { margin: 4px 0 8px; display: flex; align-items: baseline; gap: 6px; }
+.cat-n { color: var(--meta); font-weight: 500; letter-spacing: 0; }
+
+/* ---------- Search and Favorites on one row ---------- */
+.search-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 14px; }
+.search-row .search { flex: 1; min-width: 0; margin: 0; }
+.search-row .search input { height: 38px; border-radius: 19px; font-size: 16px; padding-left: 38px; }
+.search-row .search svg { left: 12px; width: 17px; height: 17px; }
+.search-row .chips { margin: 0; flex: none; }
+.search-row .chip { min-height: 38px; border-radius: 19px; }

@@ -13,9 +13,10 @@
     ['pantry', 'Pantry Essentials'],
   ];
   const GROUP_LABEL = Object.fromEntries(GROUPS);
-  const TAG_ORDER = ['under 30 min', 'high protein', 'breakfast', 'dinner', 'snack', 'dessert', 'meal prep'];
+  // Each recipe has one category (stored lowercase). These lead the list; others follow alphabetically.
+  const CATEGORY_ORDER = ['breakfast', 'lunch/dinner', 'dinner', 'snack', 'dessert'];
   const SCALES = [0.5, 1, 2, 3];
-  const RECIPE_KEYS = ['title', 'source_name', 'source_url', 'author', 'description', 'prep_time', 'cook_time',
+  const RECIPE_KEYS = ['title', 'category', 'source_name', 'source_url', 'author', 'description', 'prep_time', 'cook_time',
     'total_time', 'servings', 'ingredients', 'instructions', 'nutrition', 'tags'];
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -218,13 +219,14 @@
     S.recipes = [...remoteRecipes, ...localOnly];
     S.cooks = [...remoteCooks, ...localCooks];
     if (firstForUser) recategorize(S.recipes);
+    const migrated = migrateCategories(S.recipes);
     store.set(SYNC_KEY, {
       uid: uidNow,
       ids: union(firstForUser ? [] : book.ids, [...remoteIds]),
       cookIds: union(firstForUser ? [] : book.cookIds, [...remoteCookIds]),
     });
     store.set(LS_KEY, S);
-    if (!first && (localOnly.length || localCooks.length)) sync?.push();
+    if (!first && (localOnly.length || localCooks.length || migrated)) sync?.push();
     refreshView();
   }
 
@@ -321,6 +323,18 @@
     if (!Array.isArray(out.tags)) out.tags = [];
     if (out.ingredients == null) out.ingredients = [];
     return out;
+  }
+  // Tags were replaced by a single category. A recipe without one takes its first tag
+  // (meal-type tags first); the old tags stay in the data but aren't shown or edited.
+  function migrateCategories(recipes) {
+    let changed = false;
+    for (const r of recipes) {
+      if (r.category != null || !Array.isArray(r.tags) || !r.tags.length) continue;
+      const tags = r.tags.map((t) => String(t).toLowerCase());
+      r.category = CATEGORY_ORDER.find((c) => tags.includes(c)) || tags[0];
+      changed = true;
+    }
+    return changed;
   }
   // Strip internal fields (anything starting with "_") so exports match recipes.json.
   const cleanRecipe = (r) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_')));
@@ -583,16 +597,14 @@
   /* =========================================================================
      Home
      ========================================================================= */
-  function allTags() {
-    const seen = new Set();
-    S.recipes.forEach((r) => (r.tags || []).forEach((t) => seen.add(String(t).toLowerCase())));
-    const ordered = TAG_ORDER.filter((t) => seen.has(t));
-    return [...ordered, ...[...seen].filter((t) => !ordered.includes(t)).sort()];
+  function allCategories() {
+    const seen = new Set(S.recipes.map((r) => String(r.category || '').toLowerCase()).filter(Boolean));
+    const ordered = CATEGORY_ORDER.filter((c) => seen.has(c));
+    return [...ordered, ...[...seen].filter((c) => !ordered.includes(c)).sort()];
   }
 
   function chipsHtml() {
-    return `<button class="chip" data-a="chip" data-chip="★" aria-pressed="${ui.chips.has('★')}">${I.heart}Favorites</button>
-      ${allTags().map((t) => `<button class="chip" data-a="chip" data-chip="${esc(t)}" aria-pressed="${ui.chips.has(t)}">${esc(cap(t))}</button>`).join('')}`;
+    return `<button class="chip" data-a="chip" data-chip="★" aria-pressed="${ui.chips.has('★')}">${I.heart}Favorites</button>`;
   }
 
   function viewHome() {
@@ -604,20 +616,19 @@
       </header>
       ${seedError ? `<div class="notice"><b>Couldn't load recipes.json.</b> ${esc(seedError)}<br>Open the app from a web server (see README) or import a backup from the Settings tab.</div>` : ''}
       ${syncNoticeHtml()}
-      <div class="search">${I.search}<input id="q" type="search" placeholder="Search title or ingredient" value="${esc(ui.q)}" autocomplete="off" aria-label="Search recipes"></div>
-      <div class="chips" id="chips" role="group" aria-label="Filters">${chipsHtml()}</div>
+      <div class="search-row">
+        <div class="search">${I.search}<input id="q" type="search" placeholder="Search recipes" value="${esc(ui.q)}" autocomplete="off" aria-label="Search recipes"></div>
+        <div class="chips" id="chips" role="group" aria-label="Filters">${chipsHtml()}</div>
+      </div>
       <div id="list"></div>`;
     renderList();
   }
 
   function matchesFilters(r) {
-    const tags = (r.tags || []).map((t) => String(t).toLowerCase());
-    for (const c of ui.chips) {
-      if (c === '★' ? !S.favorites.includes(r._id) : !tags.includes(c)) return false;
-    }
+    if (ui.chips.has('★') && !S.favorites.includes(r._id)) return false;
     const q = ui.q.trim().toLowerCase();
     if (!q) return true;
-    const hay = [r.title, ...allIngredientText(r), ...tags].join('\n').toLowerCase();
+    const hay = [r.title, r.category || '', ...allIngredientText(r)].join('\n').toLowerCase();
     return q.split(/\s+/).every((w) => hay.includes(w));
   }
 
@@ -634,8 +645,16 @@
       return;
     }
     const filtered = ui.q || ui.chips.size;
+    // One section per category; recipes without one go last.
+    const sections = allCategories()
+      .map((c) => ({ label: cap(c), items: items.filter((r) => String(r.category || '').toLowerCase() === c) }))
+      .concat([{ label: 'No category', items: items.filter((r) => !r.category) }])
+      .filter((sec) => sec.items.length);
     list.innerHTML = `${filtered ? `<p class="count">${items.length} of ${S.recipes.length} recipes</p>` : ''}
-      <div class="cards">${items.map(cardHtml).join('')}</div>`;
+      ${sections.map((sec) => `<section class="cat">
+        <h2 class="sub cat-h">${esc(sec.label)} <span class="cat-n">${sec.items.length}</span></h2>
+        <div class="cards">${sec.items.map(cardHtml).join('')}</div>
+      </section>`).join('')}`;
   }
 
   // Short version for the list: "280 cal | 18g protein", plus "/bite" etc. when it isn't per serving.
@@ -654,7 +673,6 @@
         <div class="card-line">
           ${(() => { const n = S.cooks.filter((c) => c.recipe_id === r._id).length; return n ? `<span class="card-cooks" title="Cooked ${n} time${n === 1 ? '' : 's'}">${I.pot}${n}×</span>` : ''; })()}
           ${r.nutrition?.calories != null ? `<span class="card-nut">${esc(cardNutrition(r.nutrition))}</span>` : ''}
-          ${(r.tags || []).map((t) => `<span class="tag">${esc(cap(t))}</span>`).join('')}
         </div>
       </a>
       <button class="icon-btn fav ${fav ? 'on' : ''}" data-a="fav" data-id="${esc(r._id)}" aria-pressed="${fav}" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${I.heart}</button>
@@ -996,6 +1014,7 @@
       source_name: r?.source_name || '', source_url: r?.source_url || '', author: r?.author || '',
       prep_time: r?.prep_time || '', cook_time: r?.cook_time || '', total_time: r?.total_time || '', servings: r?.servings || '',
       tags: (r?.tags || []).join(', '),
+      category: String(r?.category || '').toLowerCase(),
       ing: ing.length ? ing : [{ text: '', cat: 'protein' }],
       steps: r?.instructions?.length ? [...r.instructions] : [''],
       nut: {
@@ -1039,12 +1058,12 @@
 
         ${field('title', 'Title', 'required autocomplete="off"')}
         ${field('servings', 'Servings')}
-        <span class="field-lbl">Tags</span>
-        <div class="chips tag-pick" id="tag-pick" role="group" aria-label="Tags">${tagPickHtml(d)}</div>
+        <span class="field-lbl">Category</span>
+        <div class="chips tag-pick" id="cat-pick" role="radiogroup" aria-label="Category">${catPickHtml(d)}</div>
         <div class="inline-form tag-new">
-          <label for="f-newtag" class="sr-only">New tag</label>
-          <input id="f-newtag" placeholder="New tag" autocomplete="off" autocapitalize="none">
-          <button type="button" class="btn" data-a="tag-add">Add</button>
+          <label for="f-newcat" class="sr-only">New category</label>
+          <input id="f-newcat" placeholder="New category" autocomplete="off" autocapitalize="none">
+          <button type="button" class="btn" data-a="cat-add">Add</button>
         </div>
 
         <section class="fieldset">
@@ -1101,27 +1120,25 @@
       </form>`;
   }
 
-  // Tags: tap an existing tag to add or remove it, or type a new one.
-  const draftTags = (d) => d.tags.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
-  function tagPickHtml(d) {
-    const chosen = draftTags(d);
-    const all = [...allTags(), ...chosen.filter((t) => !allTags().includes(t))];
+  // Category: tap one to choose it (tap again to clear), or type a new one.
+  function catPickHtml(d) {
+    const all = allCategories();
+    if (d.category && !all.includes(d.category)) all.push(d.category);
     return all.length
-      ? all.map((t) => `<button type="button" class="chip" data-a="tag-toggle" data-t="${esc(t)}" aria-pressed="${chosen.includes(t)}">${esc(cap(t))}</button>`).join('')
-      : '<p class="hint">No tags yet. Add one below.</p>';
+      ? all.map((c) => `<button type="button" class="chip" role="radio" data-a="cat-pick" data-c="${esc(c)}" aria-checked="${d.category === c}" aria-pressed="${d.category === c}">${esc(cap(c))}</button>`).join('')
+      : '<p class="hint">No categories yet. Add one below.</p>';
   }
-  function setDraftTags(list) {
-    ui.draft.tags = [...new Set(list)].join(', ');
+  function setDraftCategory(c) {
+    ui.draft.category = c;
     ui.dirty = true;
-    $('#tag-pick').innerHTML = tagPickHtml(ui.draft);
+    $('#cat-pick').innerHTML = catPickHtml(ui.draft);
   }
-  function addTypedTag() {
-    const input = $('#f-newtag');
-    const t = input.value.trim().toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ');
-    if (!t) return;
-    setDraftTags([...draftTags(ui.draft), t]);
+  function addTypedCategory() {
+    const input = $('#f-newcat');
+    const c = input.value.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!c) return;
+    setDraftCategory(c);
     input.value = '';
-    input.focus();
   }
 
   function setDraftField(path, value) {
@@ -1159,6 +1176,7 @@
         fat_g: num(d.nut.fat_g), fiber_g: num(d.nut.fiber_g),
         note: blankToNull(d.nut.note),
       },
+      category: blankToNull(d.category),
       tags: d.tags.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean),
     };
     let r;
@@ -1459,11 +1477,8 @@
       save();
       el.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === c.rating));
     },
-    'tag-toggle'(el) {
-      const t = el.dataset.t, list = draftTags(ui.draft);
-      setDraftTags(list.includes(t) ? list.filter((x) => x !== t) : [...list, t]);
-    },
-    'tag-add'() { addTypedTag(); },
+    'cat-pick'(el) { setDraftCategory(ui.draft.category === el.dataset.c ? '' : el.dataset.c); },
+    'cat-add'() { addTypedCategory(); },
     'cing-add'() {
       const rows = ui.cookRows.rows;
       rows.push({ text: '', cat: rows.length ? rows[rows.length - 1].cat : 'protein' });
@@ -1632,9 +1647,9 @@
   });
 
   // Cook mode: keyboard + swipe
-  // Enter in the new-tag box adds the tag instead of saving the whole recipe.
+  // Enter in the new-category box sets the category instead of saving the whole recipe.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.target.id === 'f-newtag') { e.preventDefault(); addTypedTag(); }
+    if (e.key === 'Enter' && e.target.id === 'f-newcat') { e.preventDefault(); addTypedCategory(); }
   });
   document.addEventListener('keydown', (e) => {
     if (!ui.cook) return;
@@ -1662,6 +1677,7 @@
     S = store.get(LS_KEY);
     if (S && Array.isArray(S.recipes)) {
       S = Object.assign(blankState(), S);
+      if (migrateCategories(S.recipes)) store.set(LS_KEY, S);
     } else {
       try { await seed(); }
       catch (err) { S = blankState(); S.pantry_essentials = ['olive oil']; seedError = err.message; }

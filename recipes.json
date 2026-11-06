@@ -1,6 +1,7 @@
 [
   {
     "title": "Turkey Sweet Potato Chili",
+    "category": "lunch/dinner",
     "source_name": "Salt & Lavender",
     "source_url": "https://www.saltandlavender.com/turkey-sweet-potato-chili/",
     "author": "Natasha Bull",
@@ -54,15 +55,11 @@
       "fat_g": 9,
       "fiber_g": 6,
       "note": "Excludes optional toppings."
-    },
-    "tags": [
-      "dinner",
-      "high protein",
-      "meal prep"
-    ]
+    }
   },
   {
     "title": "Zucchini Sauce Pasta",
+    "category": "lunch/dinner",
     "source_name": "Personal cookbook (photographed page, p. 121)",
     "author": null,
     "description": "Cooked-down zucchini becomes buttery and turns into a simple sauce for pasta with chicken sausage, Parmesan, and pesto.",
@@ -111,15 +108,11 @@
       "fat_g": 20,
       "fiber_g": 4,
       "note": null
-    },
-    "tags": [
-      "dinner",
-      "under 30 min",
-      "high protein"
-    ]
+    }
   },
   {
     "title": "Vanilla Bean Ninja Creami Ice Cream",
+    "category": "ninja creami",
     "source_name": null,
     "source_url": null,
     "author": null,
@@ -150,14 +143,11 @@
       "fat_g": 6,
       "fiber_g": 0,
       "note": "Protein is modest because hemp protein powder is much lower in protein per scoop than whey."
-    },
-    "tags": [
-      "dessert",
-      "ninja creami"
-    ]
+    }
   },
   {
     "title": "Strawberry Chia Pudding",
+    "category": "snack",
     "source_name": null,
     "source_url": null,
     "author": null,
@@ -195,14 +185,11 @@
       "fat_g": 6,
       "fiber_g": 8,
       "note": null
-    },
-    "tags": [
-      "breakfast",
-      "snack"
-    ]
+    }
   },
   {
     "title": "Chocolate Chip Energy Bites",
+    "category": "snack",
     "source_name": null,
     "source_url": null,
     "author": null,
@@ -247,13 +234,11 @@
       "fat_g": 7,
       "fiber_g": 3,
       "note": null
-    },
-    "tags": [
-      "snack"
-    ]
+    }
   },
   {
     "title": "Peanut Butter Ninja Creami Ice Cream",
+    "category": "ninja creami",
     "source_name": null,
     "source_url": null,
     "author": null,
@@ -291,14 +276,11 @@
       "fat_g": 4,
       "fiber_g": 2,
       "note": null
-    },
-    "tags": [
-      "dessert",
-      "ninja creami"
-    ]
+    }
   },
   {
     "title": "BBQ Salmon Bowls with Mango Avocado Salsa",
+    "category": "lunch/dinner",
     "source_name": "Pinch of Yum",
     "source_url": "https://pinchofyum.com/bbq-salmon-mango-salsa",
     "author": "Lindsay Ostrom",
@@ -351,15 +333,11 @@
       "fat_g": 35,
       "fiber_g": 6,
       "note": "Assumes 1.5 lbs farmed salmon (about 6 oz per serving), 1½ cups dry white rice, and 4 servings."
-    },
-    "tags": [
-      "dinner",
-      "under 30 min",
-      "high protein"
-    ]
+    }
   },
   {
     "title": "Cottage Cheese Egg Bites",
+    "category": "breakfast",
     "source_name": null,
     "source_url": null,
     "author": null,
@@ -403,12 +381,6 @@
       "fat_g": 3.5,
       "fiber_g": 0.5,
       "note": "Assumes 2% cottage cheese and makes 20 bites. Excludes toppings."
-    },
-    "tags": [
-      "breakfast",
-      "high protein",
-      "meal prep",
-      "under 30 min"
-    ]
+    }
   }
 ]
