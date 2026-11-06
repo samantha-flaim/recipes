@@ -104,7 +104,7 @@ The key is stored only in that device's browser storage. It's never put in `reci
 ```
 
 Notes:
-- `prep_time`, `cook_time`, and `total_time` can stay in the file, but the app doesn't show or edit them.
+- `description`, `prep_time`, `cook_time`, and `total_time` can stay in the file, but the app doesn't show or edit them.
 - `ingredients` can also be a plain list of strings: `["1 cup milk", "Pinch of salt"]`.
 - Put a number first (`1½ cups`, `15–20 g`, `2 to 3`) so scaling can do the math.
 - If the nutrition numbers are for the whole batch, include "entire recipe" in `per`, for example `"pint (entire recipe)"`. Scaling then multiplies the totals. Per-serving numbers stay the same when scaling.

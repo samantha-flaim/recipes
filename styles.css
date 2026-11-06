@@ -299,3 +299,9 @@ details.paste textarea { min-height: 160px; }
 .hist-comment { color: var(--meta); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cook-actions { margin-top: 28px; }
 .top .cook-btn { min-height: 40px; }
+
+/* ---------- Tag picker (edit form) ---------- */
+.tag-pick { margin: 2px 0 8px; }
+.tag-new { margin: 0; }
+.form .tag-new input { min-height: 40px; padding: 6px 12px; }
+.tag-new .btn { min-height: 40px; }

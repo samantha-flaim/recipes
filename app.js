@@ -674,7 +674,6 @@
       </header>
       <article class="detail">
         <h1>${esc(r.title)}</h1>
-        ${r.description ? `<p class="desc">${esc(r.description)}</p>` : ''}
         ${r.servings ? `<p class="meta"><span><b>Servings</b>&nbsp;${esc(scaleText(r.servings, f))}</span></p>` : ''}
         ${n && n.calories != null ? `<p class="nut">${esc(nutritionFull(n, f))}</p>` : ''}
         ${n?.note ? `<p class="nut-note">${esc(n.note)}</p>` : ''}
@@ -1031,10 +1030,14 @@
         </details>
 
         ${field('title', 'Title', 'required autocomplete="off"')}
-        <label for="f-description">Description</label>
-        <textarea id="f-description" data-f="description">${esc(d.description)}</textarea>
         ${field('servings', 'Servings')}
-        ${field('tags', 'Tags (comma separated)', 'placeholder="dinner, high protein, snack" autocapitalize="none"')}
+        <span class="field-lbl">Tags</span>
+        <div class="chips tag-pick" id="tag-pick" role="group" aria-label="Tags">${tagPickHtml(d)}</div>
+        <div class="inline-form tag-new">
+          <label for="f-newtag" class="sr-only">New tag</label>
+          <input id="f-newtag" placeholder="New tag" autocomplete="off" autocapitalize="none">
+          <button type="button" class="btn" data-a="tag-add">Add</button>
+        </div>
 
         <section class="fieldset">
           <h2>Ingredients</h2>
@@ -1088,6 +1091,29 @@
           <button type="submit" class="btn primary">Save recipe</button>
         </div>
       </form>`;
+  }
+
+  // Tags: tap an existing tag to add or remove it, or type a new one.
+  const draftTags = (d) => d.tags.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  function tagPickHtml(d) {
+    const chosen = draftTags(d);
+    const all = [...allTags(), ...chosen.filter((t) => !allTags().includes(t))];
+    return all.length
+      ? all.map((t) => `<button type="button" class="chip" data-a="tag-toggle" data-t="${esc(t)}" aria-pressed="${chosen.includes(t)}">${esc(cap(t))}</button>`).join('')
+      : '<p class="hint">No tags yet. Add one below.</p>';
+  }
+  function setDraftTags(list) {
+    ui.draft.tags = [...new Set(list)].join(', ');
+    ui.dirty = true;
+    $('#tag-pick').innerHTML = tagPickHtml(ui.draft);
+  }
+  function addTypedTag() {
+    const input = $('#f-newtag');
+    const t = input.value.trim().toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ');
+    if (!t) return;
+    setDraftTags([...draftTags(ui.draft), t]);
+    input.value = '';
+    input.focus();
   }
 
   function setDraftField(path, value) {
@@ -1326,7 +1352,6 @@
       if (!d.paste.trim()) { toast('Paste some recipe text first'); return; }
       const p = parseRecipeText(d.paste);
       if (p.title && !d.title) d.title = p.title;
-      if (p.description && !d.description) d.description = p.description;
       if (p.servings) d.servings = p.servings;
       if (p.ing.length) d.ing = p.ing;
       if (p.steps.length) d.steps = p.steps;
@@ -1410,6 +1435,11 @@
       save();
       el.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === c.rating));
     },
+    'tag-toggle'(el) {
+      const t = el.dataset.t, list = draftTags(ui.draft);
+      setDraftTags(list.includes(t) ? list.filter((x) => x !== t) : [...list, t]);
+    },
+    'tag-add'() { addTypedTag(); },
     'cing-add'() {
       const rows = ui.cookRows.rows;
       rows.push({ text: '', cat: rows.length ? rows[rows.length - 1].cat : 'protein' });
@@ -1573,6 +1603,10 @@
   });
 
   // Cook mode: keyboard + swipe
+  // Enter in the new-tag box adds the tag instead of saving the whole recipe.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'f-newtag') { e.preventDefault(); addTypedTag(); }
+  });
   document.addEventListener('keydown', (e) => {
     if (!ui.cook) return;
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); cookGo(1); }
