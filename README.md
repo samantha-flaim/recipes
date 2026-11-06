@@ -60,14 +60,14 @@ Rate it Bad / Neutral / Good and add a comment any time. Each cook has **Cook ag
 
 ## AI nutrition
 
-On the edit screen, **Calculate with AI** sends the recipe's title, servings, ingredients, and steps to Claude (`claude-opus-5-5`) and fills in calories, protein, carbs, fat, fiber, "per", and a one-line note on its assumptions. Check the numbers, then save.
+On the edit screen, **Calculate with AI** sends the recipe's title, servings, ingredients, and steps to Claude and fills in calories, protein, carbs, fat, fiber, "per", and a one-line note on its assumptions. Check the numbers, then save.
 
 It uses your own Anthropic API key:
 
 1. Create a key at https://console.anthropic.com (API Keys) and set a monthly spend limit under Billing.
 2. In the app: Settings tab → **AI nutrition** → paste the key → **Save key**. Do this once per device.
 
-The key is stored only in that device's browser storage. It's never put in `recipes.json`, Firebase, or this repo, and the app sends it only to Anthropic. Each calculation costs roughly 5–7¢. **Remove key** in Settings deletes it from the device.
+The key is stored only in that device's browser storage. It's never put in `recipes.json`, Firebase, or this repo, and the app sends it only to Anthropic. Pick the model under Settings → AI nutrition → Model (per device): **Haiku 5.5** (default, about 0.1¢ per calculation), Sonnet 5.5 (about 1–2¢), or Opus 5.5 (about 5–7¢). **Remove key** in Settings deletes it from the device.
 
 ## Adding a recipe
 

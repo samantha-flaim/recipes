@@ -953,7 +953,7 @@
     if (!key) throw new Error('Add your Anthropic API key in Settings to calculate nutrition.');
     let ai;
     try { ai = await import('./ai.js'); } catch { throw new Error("Couldn't load the AI helper. Check your connection."); }
-    try { return await ai.estimateNutrition(key, payload); } catch (err) { throw new Error(ai.errorMessage(err)); }
+    try { return await ai.estimateNutrition(key, payload, getAiModel()); } catch (err) { throw new Error(ai.errorMessage(err)); }
   }
   const aiIngredients = (ing) => ingredientRows(ing).filter((x) => x.text.trim()).map((x) => ({ group: GROUP_LABEL[x.cat] || '', text: x.text.trim() }));
 
@@ -1182,6 +1182,18 @@
      ========================================================================= */
   const AI_KEY = 'recipeapp.anthropicKey';
   const getAiKey = () => { try { return localStorage.getItem(AI_KEY) || ''; } catch { return ''; } };
+  // Model choice is per device too. Kept here (not in ai.js) so Settings works offline.
+  const AI_MODEL_KEY = 'recipeapp.aiModel';
+  const AI_MODELS = [
+    ['claude-haiku-5-5', 'Haiku 5.5 · about 0.1¢ each'],
+    ['claude-sonnet-5-5', 'Sonnet 5.5 · about 1–2¢ each'],
+    ['claude-opus-5-5', 'Opus 5.5 · about 5–7¢ each'],
+  ];
+  const getAiModel = () => {
+    let m = '';
+    try { m = localStorage.getItem(AI_MODEL_KEY) || ''; } catch { /* storage blocked */ }
+    return AI_MODELS.some(([id]) => id === m) ? m : AI_MODELS[0][0];
+  };
   const setAiKey = (k) => { try { k ? localStorage.setItem(AI_KEY, k) : localStorage.removeItem(AI_KEY); return true; } catch { return false; } };
 
   function aiPanelHtml() {
@@ -1197,7 +1209,11 @@
     return `<section class="panel" id="ai-panel"><h2>AI nutrition</h2>
       <p>Lets <b>Calculate with AI</b> on the edit screen fill in nutrition facts. The key is saved on this device only and sent only to Anthropic.</p>
       ${body}
-      <p class="hint">Get a key at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> and set a monthly spend limit there. Each calculation costs about 5–7¢.</p>
+      <div class="form">
+        <label for="ai-model">Model</label>
+        <select id="ai-model">${AI_MODELS.map(([id, label]) => `<option value="${id}" ${id === getAiModel() ? 'selected' : ''}>${label}</option>`).join('')}</select>
+      </div>
+      <p class="hint">Haiku is plenty for nutrition estimates. Try Sonnet if a result looks off. Get a key at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> and set a monthly spend limit there.</p>
     </section>`;
   }
 
@@ -1564,6 +1580,11 @@
 
   document.addEventListener('change', (e) => {
     const t = e.target;
+    if (t.id === 'ai-model') {
+      try { localStorage.setItem(AI_MODEL_KEY, t.value); } catch { /* storage blocked */ }
+      toast(`AI nutrition will use ${t.options[t.selectedIndex].text.split(' · ')[0]}`);
+      return;
+    }
     if (t.dataset.cingCat != null && ui.cookRows) {
       ui.cookRows.rows[+t.dataset.cingCat].cat = t.value;
       findCooked(ui.cookRows.id).ingredients = rowsToIngredients(ui.cookRows.rows);

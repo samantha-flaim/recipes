@@ -3,7 +3,16 @@
 // demand by app.js, so the app works without it when offline or when no key is set.
 import Anthropic from 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.1.0/+esm';
 
-const MODEL = 'claude-opus-5-5';
+// Models the user can pick in Settings (per device). Haiku is the default: nutrition
+// estimates are a small task, and it costs a fraction of a cent per recipe.
+export const MODELS = [
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', cost: 'about 0.1¢ per calculation' },
+  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', cost: 'about 1–2¢ per calculation' },
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', cost: 'about 5–7¢ per calculation' },
+];
+export const DEFAULT_MODEL = 'claude-haiku-5-5';
+// Server-side refusal fallback isn't available for Haiku.
+const FALLBACK_MODELS = new Set(['claude-sonnet-5-5', 'claude-opus-5-5']);
 
 const SCHEMA = {
   type: 'object',
@@ -44,14 +53,15 @@ function recipePrompt(r) {
   return lines.join('\n');
 }
 
-export async function estimateNutrition(apiKey, recipe) {
+export async function estimateNutrition(apiKey, recipe, model = DEFAULT_MODEL) {
   // The SDK refuses to run in a browser unless told to; this app is personal and the key is the user's own.
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 1 });
+  if (!MODELS.some((m) => m.id === model)) model = DEFAULT_MODEL;
+  const fallback = FALLBACK_MODELS.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {};
   const response = await client.beta.messages.create({
-    model: MODEL,
+    model,
     max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    ...fallback,
     output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
     system: SYSTEM,
     messages: [{ role: 'user', content: recipePrompt(recipe) }],
