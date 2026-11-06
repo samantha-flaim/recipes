@@ -1,12 +1,14 @@
 // Offline support: try the network first (so updates show up right away), fall back to
 // the cache when offline or when the network is slow. Bump CACHE if files are added or renamed.
-const CACHE = 'recipes-v1';
+const CACHE = 'recipes-v2';
 const NETWORK_TIMEOUT_MS = 3000;
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './sync.js',
+  './firebase-config.js',
   './manifest.webmanifest',
   './recipes.json',
   './pantry_essentials.json',
@@ -29,7 +31,18 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+
+  // Firebase SDK files are versioned and never change: keep a copy so sync starts offline.
+  if (url.origin === 'https://www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
+    event.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+      return res;
+    })));
+    return;
+  }
+  if (url.origin !== self.location.origin) return;
 
   const fromCache = () => caches.match(req, { ignoreSearch: true })
     .then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

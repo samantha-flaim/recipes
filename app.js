@@ -155,6 +155,163 @@
   function save() {
     if (!store.set(LS_KEY, S)) toast("Couldn't save. Storage is full or blocked in this browser.");
     updateBadge();
+    sync?.push();
+  }
+
+  /* =========================================================================
+     Firebase sync (see sync.js). The device copy above is always kept, so the
+     app works offline and while signed out; when signed in, Firestore wins.
+     ========================================================================= */
+  const SYNC_KEY = 'recipeapp.sync'; // {uid, ids}: which recipes this device has seen in Firestore
+  let sync = null;
+  let syncStatus = { signedIn: false, state: 'starting' };
+
+  const normTitle = (t) => String(t || '').trim().toLowerCase();
+  const union = (a, b) => [...new Set([...(a || []), ...(b || [])])];
+
+  // Firestore returns fields alphabetically; put them back in recipes.json order.
+  function orderRecipe(r) {
+    const out = { _id: r._id };
+    for (const k of RECIPE_KEYS) if (k in r) out[k] = r[k];
+    for (const k of Object.keys(r)) if (!(k in out)) out[k] = r[k];
+    if (out.ingredients && !Array.isArray(out.ingredients)) {
+      const ing = {};
+      for (const k of groupOrder(out.ingredients)) if (k in out.ingredients) ing[k] = out.ingredients[k];
+      out.ingredients = ing;
+    }
+    if (out.nutrition) {
+      const n = {};
+      for (const k of ['per', 'calories', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g', 'note']) if (k in out.nutrition) n[k] = out.nutrition[k];
+      out.nutrition = Object.assign(n, out.nutrition);
+    }
+    return out;
+  }
+
+  function applyRemote(remote, first) {
+    const uidNow = syncStatus.uid;
+    const book = store.get(SYNC_KEY) || {};
+    const firstForUser = first && book.uid !== uidNow;
+    const remoteRecipes = remote.recipes.map(orderRecipe).sort((a, b) => (a._order ?? 1e9) - (b._order ?? 1e9));
+    const remoteIds = new Set(remoteRecipes.map((r) => r._id));
+    const remoteTitles = new Map(remoteRecipes.map((r) => [normTitle(r.title), r._id]));
+    const seen = new Set(book.uid === uidNow ? book.ids || [] : []);
+
+    // Recipes only on this device: on the first sign-in, anything with a new title;
+    // after that, only recipes Firestore has never had (anything else was deleted elsewhere).
+    const localOnly = S.recipes.filter((r) => (firstForUser
+      ? !remoteTitles.has(normTitle(r.title))
+      : !remoteIds.has(r._id) && !seen.has(r._id)));
+    // Point favorites / shopping / checks at the Firestore copy of the same recipe.
+    const mapId = (id) => {
+      const r = S.recipes.find((x) => x._id === id);
+      return (r && remoteTitles.get(normTitle(r.title))) || id;
+    };
+    const remap = (obj) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [mapId(k), v]));
+
+    if (firstForUser) {
+      S.favorites = union(remote.favorites?.ids, S.favorites.map(mapId));
+      S.pantry_essentials = union(remote.pantry?.items, S.pantry_essentials);
+      S.checks = remap(S.checks);
+    } else {
+      if (remote.favorites) S.favorites = [...remote.favorites.ids];
+      if (remote.pantry) S.pantry_essentials = [...remote.pantry.items];
+    }
+    if (remote.shopping) {
+      S.shopping = { ...remote.shopping.recipes };
+      S.shopChecks = { ...remote.shopping.checked };
+    } else if (firstForUser) S.shopping = remap(S.shopping);
+
+    S.recipes = [...remoteRecipes, ...localOnly];
+    if (firstForUser) recategorize(S.recipes);
+    store.set(SYNC_KEY, { uid: uidNow, ids: union(firstForUser ? [] : book.ids, [...remoteIds]) });
+    store.set(LS_KEY, S);
+    if (!first && localOnly.length) sync?.push();
+    refreshView();
+  }
+
+  // Re-render after new data arrives, without wiping a form being typed in.
+  function refreshView() {
+    updateBadge();
+    const [view = '', id] = location.hash.replace(/^#\/?/, '').split('/');
+    if (view === 'edit' || view === 'new' || view === 'more') return;
+    if (ui.cook) { if (findRecipe(ui.cook.id)) renderCook(); else closeCook(); }
+    if (view === 'r') rerender(() => viewRecipe(decodeURIComponent(id || '')));
+    else if (view === 'shop') rerender(viewShop);
+    else if (view === 'pantry') rerender(viewPantry);
+    else if ($('#list')) {
+      $('#chips').innerHTML = chipsHtml();
+      renderList();
+      renderSyncUI();
+    }
+  }
+
+  function syncMessage() {
+    const s = syncStatus;
+    if (s.state === 'unavailable') return "Sync isn't available right now. Your recipes are saved on this device.";
+    if (!s.signedIn) return 'Not signed in. Recipes are saved on this device only.';
+    if (s.state === 'error') {
+      return s.error === 'permission'
+        ? 'Firebase refused to save recipes. The database rules need to allow them (see the README).'
+        : "Couldn't sync. Your changes are saved on this device and will sync when it works again.";
+    }
+    if (s.state === 'loading') return 'Connecting…';
+    if (s.state === 'offline') return "Offline. Changes are saved on this device and will sync when you're back online.";
+    return 'Synced. Changes show up on your other devices.';
+  }
+
+  function syncPanelHtml() {
+    const s = syncStatus;
+    const body = s.signedIn
+      ? `<p class="sync-line ${s.state === 'synced' ? 'ok' : s.state === 'error' ? 'bad' : ''}">${esc(syncMessage())}</p>
+         <p class="hint">Signed in as <b>${esc(s.email)}</b></p>
+         <button class="btn block add-row" data-a="sign-out">Sign out</button>`
+      : s.state === 'unavailable' || s.state === 'starting'
+        ? `<p>${esc(s.state === 'starting' ? 'Loading…' : syncMessage())}</p>`
+        : `<p>Sign in with your Card Deals login to keep recipes, favorites, pantry, and the shopping list the same on every device.</p>
+           <form class="form" id="sync-form" novalidate>
+             <label for="sync-email">Email</label>
+             <input id="sync-email" type="email" autocomplete="username" autocapitalize="none" required>
+             <label for="sync-password">Password</label>
+             <input id="sync-password" type="password" autocomplete="current-password" required>
+             <button class="btn primary block add-row" type="submit">Sign in</button>
+           </form>`;
+    return `<section class="panel" id="sync-panel"><h2>Sync across devices</h2>${body}</section>`;
+  }
+
+  function syncNoticeHtml() {
+    return syncStatus.state === 'signed-out'
+      ? `<div class="notice" id="sync-notice">Recipes are only on this device. <a href="#/more">Sign in to sync</a></div>`
+      : '<div id="sync-notice" hidden></div>';
+  }
+
+  function renderSyncUI() {
+    const panel = $('#sync-panel');
+    if (panel && !panel.contains(document.activeElement)) panel.outerHTML = syncPanelHtml();
+    const notice = $('#sync-notice');
+    if (notice) notice.outerHTML = syncNoticeHtml();
+  }
+
+  async function startSync() {
+    if (!location.protocol.startsWith('http')) { syncStatus = { signedIn: false, state: 'unavailable' }; return; }
+    try {
+      const mod = await import('./sync.js');
+      sync = mod.start({
+        getState: () => S,
+        onRemote: applyRemote,
+        onStatus: (s) => { syncStatus = s; renderSyncUI(); },
+      });
+    } catch {
+      syncStatus = { signedIn: false, state: 'unavailable' };
+      renderSyncUI();
+    }
+  }
+
+  function authMessage(err) {
+    const code = err?.code || '';
+    if (/invalid-credential|wrong-password|user-not-found|invalid-email/.test(code)) return 'Wrong email or password.';
+    if (/network-request-failed/.test(code)) return "No connection. Try again when you're online.";
+    if (/too-many-requests/.test(code)) return 'Too many tries. Wait a few minutes and try again.';
+    return "Couldn't sign in. Try again.";
   }
 
   function normalizeRecipe(r, keepId) {
@@ -424,6 +581,11 @@
     return [...ordered, ...[...seen].filter((t) => !ordered.includes(t)).sort()];
   }
 
+  function chipsHtml() {
+    return `<button class="chip" data-a="chip" data-chip="★" aria-pressed="${ui.chips.has('★')}">${I.heart}Favorites</button>
+      ${allTags().map((t) => `<button class="chip" data-a="chip" data-chip="${esc(t)}" aria-pressed="${ui.chips.has(t)}">${esc(cap(t))}</button>`).join('')}`;
+  }
+
   function viewHome() {
     document.title = 'Recipes';
     app.innerHTML = `
@@ -432,11 +594,9 @@
         <a class="icon-btn filled" href="#/new" aria-label="Add recipe">${I.plus}</a>
       </header>
       ${seedError ? `<div class="notice"><b>Couldn't load recipes.json.</b> ${esc(seedError)}<br>Open the app from a web server (see README) or import a backup from the Backup tab.</div>` : ''}
+      ${syncNoticeHtml()}
       <div class="search">${I.search}<input id="q" type="search" placeholder="Search title or ingredient" value="${esc(ui.q)}" autocomplete="off" aria-label="Search recipes"></div>
-      <div class="chips" role="group" aria-label="Filters">
-        <button class="chip" data-a="chip" data-chip="★" aria-pressed="${ui.chips.has('★')}">${I.heart}Favorites</button>
-        ${allTags().map((t) => `<button class="chip" data-a="chip" data-chip="${esc(t)}" aria-pressed="${ui.chips.has(t)}">${esc(cap(t))}</button>`).join('')}
-      </div>
+      <div class="chips" id="chips" role="group" aria-label="Filters">${chipsHtml()}</div>
       <div id="list"></div>`;
     renderList();
   }
@@ -876,12 +1036,12 @@
      ========================================================================= */
   function viewMore() {
     document.title = 'Backup & settings';
-    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     app.innerHTML = `
       <header class="top"><h1 class="page-title">Backup</h1></header>
+      ${syncPanelHtml()}
       <section class="panel">
         <h2>Export</h2>
-        <p>Recipes are saved in this browser only. Export regularly to back them up or move them to another device.</p>
+        <p>Export a copy now and then to keep in Dropbox, or to move recipes without signing in.</p>
         <div class="stack">
           <button class="btn primary" data-a="export-backup">Export full backup (.json)</button>
           <button class="btn" data-a="export-recipes">Export recipes.json only</button>
@@ -899,21 +1059,11 @@
         <input type="file" id="import-file" accept="application/json,.json" hidden>
       </section>
       <section class="panel">
-        <h2>Sync with recipes.json</h2>
-        <p>If you added recipes to recipes.json in your repo, pull in the new ones. Recipes already here aren't changed.</p>
-        <div class="stack">
-          <button class="btn" data-a="sync-repo">Add new recipes from recipes.json</button>
-          <button class="btn danger" data-a="reset-repo">Reset to recipes.json</button>
-        </div>
-      </section>
-      <section class="panel">
         <h2>Appearance</h2>
         <div class="seg" role="group" aria-label="Theme" style="margin-top:8px">
           ${['auto', 'light', 'dark'].map((t) => `<button data-a="theme" data-t="${t}" aria-pressed="${(S.theme || 'auto') === t}">${cap(t)}</button>`).join('')}
         </div>
       </section>
-      ${standalone ? '' : `<section class="panel"><h2>Install</h2>
-        <p><b>iPhone:</b> open in Safari, tap Share, then <b>Add to Home Screen</b>.<br><b>Android:</b> Chrome menu, then <b>Install app</b> or <b>Add to Home screen</b>.</p></section>`}
       <p class="hint" style="text-align:center">${S.recipes.length} recipes · ${S.favorites.length} favorites</p>`;
   }
 
@@ -1115,22 +1265,8 @@
       input.value = '';
       input.click();
     },
-    async 'sync-repo'() {
-      try {
-        const repo = await fetchJSON('recipes.json');
-        const have = new Set(S.recipes.map((r) => r.title.trim().toLowerCase()));
-        const fresh = repo.filter((r) => r?.title && !have.has(r.title.trim().toLowerCase())).map((r) => normalizeRecipe(r));
-        S.recipes.push(...fresh);
-        recategorize(fresh);
-        save();
-        toast(fresh.length ? `Added ${fresh.length} new recipe${fresh.length === 1 ? '' : 's'}` : 'Already up to date');
-      } catch (err) { toast(`Couldn't read recipes.json (${err.message})`); }
-    },
-    async 'reset-repo'() {
-      if (!confirm('Replace everything on this device with recipes.json? Your edits, favorites, and shopping list will be lost.')) return;
-      const theme = S.theme;
-      try { await seed(); S.theme = theme; save(); toast('Reset to recipes.json'); location.hash = '#/'; }
-      catch (err) { toast(`Couldn't read recipes.json (${err.message})`); }
+    async 'sign-out'() {
+      try { await sync?.signOut(); toast('Signed out. Recipes stay on this device.'); } catch { toast("Couldn't sign out. Try again."); }
     },
     theme(el) {
       S.theme = el.dataset.t; save(); applyTheme();
@@ -1190,6 +1326,17 @@
   document.addEventListener('submit', (e) => {
     e.preventDefault();
     if (e.target.id === 'edit-form') saveDraft();
+    if (e.target.id === 'sync-form') {
+      const email = $('#sync-email').value.trim();
+      const pw = $('#sync-password').value;
+      if (!email || !pw) { toast('Enter your email and password'); return; }
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      sync.signIn(email, pw)
+        .then(() => { document.activeElement?.blur(); toast('Signed in. Syncing your recipes…'); renderSyncUI(); })
+        .catch((err) => { toast(authMessage(err)); btn.disabled = false; btn.textContent = 'Sign in'; });
+    }
     if (e.target.id === 'pantry-form') {
       const input = $('#pantry-input');
       const item = input.value.trim().toLowerCase();
@@ -1242,6 +1389,7 @@
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
+    startSync();
   }
 
   // Exposed for quick checks in the console; not used by the app.

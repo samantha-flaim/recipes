@@ -7,6 +7,7 @@ A recipe box web app you can install on your phone's home screen. It's plain HTM
 - **Cook mode:** big text, one step at a time, screen kept on
 - **Shopping list:** built from the recipes you pick, with matching ingredients merged
 - **Pantry Essentials:** things you always have on hand. Adding one moves matching ingredients into that group.
+- **Sync:** sign in once per device and recipes, favorites, pantry, and the shopping list stay the same everywhere
 - **Backup:** export and import JSON to back up or move between devices
 
 ## Files
@@ -16,17 +17,36 @@ A recipe box web app you can install on your phone's home screen. It's plain HTM
 | `recipes.json` | Your recipes, the source of truth. The app loads it the first time it opens. |
 | `pantry_essentials.json` | Starting pantry list (`["olive oil"]`) |
 | `index.html`, `styles.css`, `app.js` | The app |
+| `sync.js`, `firebase-config.js` | Sync through Firebase (same project and login as the Card Deals tracker) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and home-screen install |
 
 ## How data works
 
-The first time the app opens on a device, it copies `recipes.json` and `pantry_essentials.json` into the browser's storage (localStorage). After that, every add, edit, favorite, and checkbox is saved **on that device only**.
+The first time the app opens on a device, it copies `recipes.json` and `pantry_essentials.json` into the browser's storage (localStorage). Every add, edit, favorite, and checkbox is saved there, so the app works offline.
 
-- **Back up or move to a new phone:** Backup tab → **Export full backup**. On the other device, **Import and merge** (or **replace**).
+**Sync:** on the Backup tab, sign in with your Card Deals email and password. The app then keeps recipes, favorites, pantry essentials, and the shopping list in Firebase under your account (`users/<your id>/recipes` and `users/<your id>/recipeMeta`) and mirrors them on every signed-in device. Changes made offline sync when the device reconnects. Ingredient checkmarks and the light/dark setting stay per device.
+
+The first time you sign in on a device, anything only on that device (by title) is added to your account, so nothing is lost. After that, your account wins: a recipe deleted on one device disappears from the others.
+
+`firebase-config.js` is safe to publish. It only says which Firebase project to use; your login and the database rules are what keep the data private. The rules must let a signed-in user read and write their own `users/<id>/...` documents, for example:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+
+If the Backup tab says Firebase refused to save recipes, paste that into Firebase console → Firestore Database → Rules and click **Publish**.
+
+- **Back up or move without signing in:** Backup tab → **Export full backup**. On the other device, **Import and merge** (or **replace**).
 - **Update the repo copy:** Backup tab → **Export recipes.json only**. Replace `recipes.json` in the repo with that file and push.
-- **Pull new recipes from the repo:** Backup tab → **Add new recipes from recipes.json**. This adds recipes whose titles aren't on the device yet and doesn't touch the rest.
 
-> Clearing Safari's website data deletes the on-device copy, so export a backup now and then.
+> If you're not signed in, clearing Safari's website data deletes the on-device copy, so export a backup now and then.
 
 ## Adding a recipe
 
@@ -68,7 +88,7 @@ Notes:
 - If the nutrition numbers are for the whole batch, include "entire recipe" in `per`, for example `"pint (entire recipe)"`. Scaling then multiplies the totals. Per-serving numbers stay the same when scaling.
 - `tags` power the filter chips. The current ones are `under 30 min`, `high protein`, `breakfast`, `dinner`, `snack`, `dessert`, `meal prep`, and `ninja creami`. Any new tag becomes a chip automatically.
 
-After you push the change, open the app and go to Backup → **Add new recipes from recipes.json**.
+The app only reads `recipes.json` the very first time it opens on a device. To get a recipe you added to the file into the app, import the file: Backup tab → **Import and merge** (it adds new titles and updates matching ones).
 
 ## Try it on your computer
 
