@@ -39,6 +39,7 @@
     cart: '<svg viewBox="0 0 24 24"><path d="M3 4h2l2.2 11h11L20 8H6.2"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>',
     flame: '<svg viewBox="0 0 24 24"><path d="M12 21c-3.9 0-7-2.7-7-6.5 0-4 4-6 3.5-10.5C12 6 14 9 14 11c1-1 1.5-2.5 1.5-3.5C18 9.5 19 12 19 14.5 19 18.3 15.9 21 12 21z"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    pot: '<svg viewBox="0 0 24 24"><path d="M3 11h18M5 11v6a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-6M21 11l1.5-1.5M9 7c0-1 1-1.5 1-2.5M13 7c0-1 1-1.5 1-2.5"/></svg>',
     sparkle: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   };
 
@@ -543,13 +544,19 @@
   /* =========================================================================
      Routing
      ========================================================================= */
+  // Where a cook was opened from (a recipe page or the Cooked tab), so Back and the
+  // highlighted tab return there. Moving between cooks ("Cook again") keeps it.
+  let lastHash = '';
   function route() {
     const [view = '', id] = location.hash.replace(/^#\/?/, '').split('/');
+    if (view === 'c' && !lastHash.startsWith('#/c/')) ui.cookOrigin = lastHash.startsWith('#/r/') ? lastHash : '#/cooked';
+    lastHash = location.hash;
     if (ui.cook) closeCook();
     flushSave();
     ui.cookRows = null;
+    const fromRecipe = view === 'c' && ui.cookOrigin?.startsWith('#/r/');
     document.querySelectorAll('.tabs a').forEach((a) => {
-      const tab = { '': 'home', r: 'home', edit: 'home', new: 'home', cooked: 'cooked', c: 'cooked', more: 'more' }[view] || 'home';
+      const tab = fromRecipe ? 'home' : { '': 'home', r: 'home', edit: 'home', new: 'home', cooked: 'cooked', c: 'cooked', more: 'more' }[view] || 'home';
       a.toggleAttribute('aria-current', false);
       if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
     });
@@ -645,6 +652,7 @@
       <a class="card-link" href="#/r/${encodeURIComponent(r._id)}">
         <h2>${esc(r.title)}</h2>
         <div class="card-line">
+          ${(() => { const n = S.cooks.filter((c) => c.recipe_id === r._id).length; return n ? `<span class="card-cooks" title="Cooked ${n} time${n === 1 ? '' : 's'}">${I.pot}${n}×</span>` : ''; })()}
           ${r.nutrition?.calories != null ? `<span class="card-nut">${esc(cardNutrition(r.nutrition))}</span>` : ''}
           ${(r.tags || []).map((t) => `<span class="tag">${esc(cap(t))}</span>`).join('')}
         </div>
@@ -874,7 +882,7 @@
 
     app.innerHTML = `
       <header class="top">
-        <a class="icon-btn" href="#/cooked" aria-label="Back to Cooked">${I.back}</a>
+        <a class="icon-btn" href="${esc(ui.cookOrigin || '#/cooked')}" aria-label="${ui.cookOrigin?.startsWith('#/r/') ? 'Back to recipe' : 'Back to Cooked'}">${I.back}</a>
         <span class="spacer"></span>
         ${r?.instructions.length ? `<button class="btn small cook-btn" data-a="cook" data-id="${esc(r._id)}" data-cook="${esc(id)}">${I.flame}Cook mode</button>` : ''}
       </header>
@@ -1505,7 +1513,7 @@
       S.cooks = S.cooks.filter((x) => x._id !== c._id);
       save();
       toast('Cook deleted');
-      location.hash = '#/cooked';
+      location.hash = ui.cookOrigin || '#/cooked';
     },
     'cook-filter'(el) { ui.cookFilter = el.dataset.v; viewCookedList(); },
     cook(el) { openCook(el.dataset.id, el.dataset.cook); },

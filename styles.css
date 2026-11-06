@@ -305,3 +305,5 @@ details.paste textarea { min-height: 160px; }
 .tag-new { margin: 0; }
 .form .tag-new input { min-height: 40px; padding: 6px 12px; }
 .tag-new .btn { min-height: 40px; }
+.card-cooks { display: inline-flex; align-items: center; gap: 2px; color: var(--title); font-weight: 600; white-space: nowrap; }
+.card-cooks svg { width: 14px; height: 14px; }
