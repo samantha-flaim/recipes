@@ -32,7 +32,6 @@
     edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg>',
     heart: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
-    serves: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M3 5v5M3 10v9M21 5v14"/></svg>',
     search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
     x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
@@ -124,10 +123,6 @@
     if (n.protein_g != null) parts.push(`${fmtN(n.protein_g * m)}g protein`);
     return { m, parts, per: n.per || 'serving' };
   }
-  function nutritionSummary(n) {
-    const p = nutritionParts(n);
-    return p ? `${p.parts.join(' | ')} per ${p.per}` : '';
-  }
   function nutritionFull(n, f) {
     const p = nutritionParts(n, f);
     if (!p) return '';
@@ -150,11 +145,10 @@
   let seedError = null;
   const ui = { q: '', chips: new Set(), scale: {}, draft: null, dirty: false, cook: null };
 
-  const blankState = () => ({ recipes: [], pantry_essentials: [], favorites: [], shopping: {}, shopChecks: {}, checks: {}, theme: 'auto' });
+  const blankState = () => ({ recipes: [], pantry_essentials: [], favorites: [], theme: 'auto' });
 
   function save() {
     if (!store.set(LS_KEY, S)) toast("Couldn't save. Storage is full or blocked in this browser.");
-    updateBadge();
     sync?.push();
   }
 
@@ -201,25 +195,19 @@
     const localOnly = S.recipes.filter((r) => (firstForUser
       ? !remoteTitles.has(normTitle(r.title))
       : !remoteIds.has(r._id) && !seen.has(r._id)));
-    // Point favorites / shopping / checks at the Firestore copy of the same recipe.
+    // Point favorites at the Firestore copy of the same recipe.
     const mapId = (id) => {
       const r = S.recipes.find((x) => x._id === id);
       return (r && remoteTitles.get(normTitle(r.title))) || id;
     };
-    const remap = (obj) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [mapId(k), v]));
 
     if (firstForUser) {
       S.favorites = union(remote.favorites?.ids, S.favorites.map(mapId));
       S.pantry_essentials = union(remote.pantry?.items, S.pantry_essentials);
-      S.checks = remap(S.checks);
     } else {
       if (remote.favorites) S.favorites = [...remote.favorites.ids];
       if (remote.pantry) S.pantry_essentials = [...remote.pantry.items];
     }
-    if (remote.shopping) {
-      S.shopping = { ...remote.shopping.recipes };
-      S.shopChecks = { ...remote.shopping.checked };
-    } else if (firstForUser) S.shopping = remap(S.shopping);
 
     S.recipes = [...remoteRecipes, ...localOnly];
     if (firstForUser) recategorize(S.recipes);
@@ -231,12 +219,10 @@
 
   // Re-render after new data arrives, without wiping a form being typed in.
   function refreshView() {
-    updateBadge();
     const [view = '', id] = location.hash.replace(/^#\/?/, '').split('/');
     if (view === 'edit' || view === 'new' || view === 'more') return;
     if (ui.cook) { if (findRecipe(ui.cook.id)) renderCook(); else closeCook(); }
     if (view === 'r') rerender(() => viewRecipe(decodeURIComponent(id || '')));
-    else if (view === 'shop') rerender(viewShop);
     else if (view === 'pantry') rerender(viewPantry);
     else if ($('#list')) {
       $('#chips').innerHTML = chipsHtml();
@@ -267,7 +253,7 @@
          <button class="btn block add-row" data-a="sign-out">Sign out</button>`
       : s.state === 'unavailable' || s.state === 'starting'
         ? `<p>${esc(s.state === 'starting' ? 'Loading…' : syncMessage())}</p>`
-        : `<p>Sign in with your Card Deals login to keep recipes, favorites, pantry, and the shopping list the same on every device.</p>
+        : `<p>Sign in with your Card Deals login to keep recipes, favorites, and pantry essentials the same on every device.</p>
            <form class="form" id="sync-form" novalidate>
              <label for="sync-email">Email</label>
              <input id="sync-email" type="email" autocomplete="username" autocapitalize="none" required>
@@ -406,7 +392,59 @@
   const allIngredientText = (r) => ingredientGroups(r).flatMap((g) => g.items.map((i) => i.text));
 
   /* =========================================================================
-     Shopping list merge
+     Ingredient names inside the steps (shown as pills)
+     ========================================================================= */
+  // Words that are too generic to mark on their own (they still match as part of a longer name).
+  const PILL_STOP = new Set(['powder', 'flake', 'juice', 'zest', 'wedge', 'extract', 'sauce', 'spray', 'blend', 'mix', 'piece',
+    'red', 'green', 'yellow', 'white', 'black', 'brown', 'sweet', 'ground', 'dark', 'light', 'dried', 'freeze-dried', 'fresh',
+    'large', 'small', 'medium', 'cooked', 'frozen', 'salted', 'unsalted', 'kosher', 'smoked', 'crushed', 'whole', 'extra',
+    'extra-virgin', 'fire-roasted', 'greek', 'cherry', 'baby', 'mixed', 'plain', 'raw', 'toasted', 'roasted', 'sliced']);
+  const singular = (w) => w.replace(/ies$/, 'y').replace(/oes$/, 'o').replace(/([^s])s$/, '$1');
+
+  // Names to look for in the steps, from each ingredient line: the full name, its last
+  // two words, and its first and last word when those are specific enough.
+  function ingredientTerms(r) {
+    const terms = new Set();
+    for (const line of allIngredientText(r)) {
+      const base = line.replace(/\([^)]*\)/g, ' ').split(',')[0];
+      for (const piece of base.split(/\s*(?:\band\/or\b|\bor\b|\band\b|\bplus\b|&|\/)\s*/i)) {
+        const words = parseIngredient(piece).name.replace(/\b(with|in|for|to)\b.*$/, '').trim().split(/\s+/).filter(Boolean);
+        if (!words.length) continue;
+        terms.add(words.join(' '));
+        if (words.length > 2) terms.add(words.slice(-2).join(' '));
+        const first = words[0], last = words[words.length - 1];
+        if (words.length > 1 && !PILL_STOP.has(singular(last))) terms.add(last);
+        if (words.length > 1 && first.length >= 5 && !PILL_STOP.has(singular(first))) terms.add(first);
+      }
+    }
+    return [...terms].filter((t) => t.length >= 3 && !PILL_STOP.has(singular(t)));
+  }
+
+  // One regex for all of a recipe's names, longest first, matching singular or plural.
+  function ingredientRegex(r) {
+    const terms = ingredientTerms(r).sort((a, b) => b.length - a.length);
+    if (!terms.length) return null;
+    const pattern = terms.map((t) => {
+      const words = t.split(' ');
+      const lastWord = singular(words.pop());
+      const tail = lastWord.endsWith('y') ? `${escRe(lastWord.slice(0, -1))}(?:y|ies)` : `${escRe(lastWord)}(?:es|s)?`;
+      return [...words.map(escRe), tail].join('\\s+');
+    }).join('|');
+    return new RegExp(`(?<![A-Za-z])(?:${pattern})(?![A-Za-z])`, 'gi');
+  }
+
+  function withPills(text, re) {
+    if (!re) return esc(text);
+    let out = '', last = 0;
+    for (const m of text.matchAll(re)) {
+      out += esc(text.slice(last, m.index)) + `<span class="ing">${esc(m[0])}</span>`;
+      last = m.index + m[0].length;
+    }
+    return out + esc(text.slice(last));
+  }
+
+  /* =========================================================================
+     Ingredient name parsing
      ========================================================================= */
   const UNITS = {
     tablespoon: 'tbsp', tablespoons: 'tbsp', tbsp: 'tbsp', tbs: 'tbsp', teaspoon: 'tsp', teaspoons: 'tsp', tsp: 'tsp',
@@ -414,7 +452,6 @@
     g: 'g', gram: 'g', grams: 'g', kg: 'kg', ml: 'ml', clove: 'clove', cloves: 'clove', can: 'can', cans: 'can',
     scoop: 'scoop', scoops: 'scoop', pinch: 'pinch', slice: 'slice', slices: 'slice', serving: 'serving', servings: 'serving',
   };
-  const PLURAL_UNITS = { cup: 'cups', clove: 'cloves', can: 'cans', scoop: 'scoops', slice: 'slices', serving: 'servings', pinch: 'pinches' };
   const DESCRIPTORS = /\b(large|medium|small|fresh|freshly|minced|chopped|diced|grated|sliced|pitted|loosely|packed|finely|roughly|halved|crumbled|peeled|drained|optional|for topping|for serving|to taste|added gradually|about|plus|and\/or)\b/gi;
 
   function parseIngredient(text) {
@@ -438,55 +475,6 @@
     if (!unit && /\bcloves?$/.test(name)) { unit = 'clove'; name = name.replace(/\s*cloves?$/, ''); }
     const key = name.split(' ').map((w) => w.replace(/ies$/, 'y').replace(/oes$/, 'o').replace(/([^s])s$/, '$1')).join(' ');
     return { lo, hi, unit, name, key: key || text.toLowerCase() };
-  }
-
-  function buildShoppingList() {
-    const groups = new Map(); // groupKey -> Map(itemKey -> item)
-    const order = ['protein', 'produce', 'shelf', 'seasonings'];
-    const byKey = new Map();
-    for (const [id, mult] of Object.entries(S.shopping)) {
-      const r = findRecipe(id);
-      if (!r) continue;
-      for (const g of ingredientGroups(r)) {
-        for (const it of g.items) {
-          const scaled = scaleText(it.text, mult);
-          const p = parseIngredient(scaled);
-          let entry = byKey.get(p.key);
-          if (!entry) {
-            entry = { key: p.key, group: g.key, name: p.name, parts: [] };
-            byKey.set(p.key, entry);
-            if (!order.includes(g.key)) order.push(g.key);
-            if (!groups.has(g.key)) groups.set(g.key, []);
-            groups.get(g.key).push(entry);
-          }
-          entry.parts.push({ text: scaled, recipe: r.title, ...p });
-        }
-      }
-    }
-    // pantry and "other" go last
-    const sorted = [...order.filter((k) => k !== 'other' && k !== 'pantry'), 'other', 'pantry'];
-    return sorted.filter((k) => groups.has(k)).map((k) => ({
-      key: k,
-      label: k === 'other' ? 'Other' : GROUP_LABEL[k] || cap(k),
-      items: groups.get(k).map(describeEntry),
-    }));
-  }
-
-  function describeEntry(e) {
-    const from = [...new Set(e.parts.map((p) => p.recipe))].join(', ');
-    if (e.parts.length === 1) return { key: e.key, text: e.parts[0].text, from };
-    const units = new Set(e.parts.map((p) => p.unit));
-    if (e.parts.every((p) => p.lo != null) && units.size === 1) {
-      const unit = [...units][0];
-      const lo = e.parts.reduce((s, p) => s + p.lo, 0);
-      const anyHi = e.parts.some((p) => p.hi != null);
-      const hi = e.parts.reduce((s, p) => s + (p.hi ?? p.lo), 0);
-      const metric = /^(g|kg|ml)$/.test(unit);
-      const qty = fmtQty(lo, metric) + (anyHi && hi !== lo ? `–${fmtQty(hi, metric)}` : '');
-      const u = unit ? ' ' + (hi > 1 && PLURAL_UNITS[unit] ? PLURAL_UNITS[unit] : unit) : '';
-      return { key: e.key, text: `${qty}${u} ${e.name}`, from };
-    }
-    return { key: e.key, text: cap(e.name || e.parts[0].text), detail: e.parts.map((p) => p.text).join(' · '), from };
   }
 
   /* =========================================================================
@@ -547,7 +535,7 @@
     const [view = '', id] = location.hash.replace(/^#\/?/, '').split('/');
     if (ui.cook) closeCook();
     document.querySelectorAll('.tabs a').forEach((a) => {
-      const tab = { '': 'home', r: 'home', edit: 'home', new: 'home', shop: 'shop', pantry: 'pantry', more: 'more' }[view] || 'home';
+      const tab = { '': 'home', r: 'home', edit: 'home', new: 'home', pantry: 'pantry', more: 'more' }[view] || 'home';
       a.toggleAttribute('aria-current', false);
       if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
     });
@@ -556,7 +544,6 @@
       case 'r': viewRecipe(decodeURIComponent(id || '')); break;
       case 'edit': viewEdit(decodeURIComponent(id || '')); break;
       case 'new': viewEdit(null); break;
-      case 'shop': viewShop(); break;
       case 'pantry': viewPantry(); break;
       case 'more': viewMore(); break;
       default: viewHome();
@@ -593,7 +580,7 @@
         <h1 class="page-title">Recipes</h1>
         <a class="icon-btn filled" href="#/new" aria-label="Add recipe">${I.plus}</a>
       </header>
-      ${seedError ? `<div class="notice"><b>Couldn't load recipes.json.</b> ${esc(seedError)}<br>Open the app from a web server (see README) or import a backup from the Backup tab.</div>` : ''}
+      ${seedError ? `<div class="notice"><b>Couldn't load recipes.json.</b> ${esc(seedError)}<br>Open the app from a web server (see README) or import a backup from the Settings tab.</div>` : ''}
       ${syncNoticeHtml()}
       <div class="search">${I.search}<input id="q" type="search" placeholder="Search title or ingredient" value="${esc(ui.q)}" autocomplete="off" aria-label="Search recipes"></div>
       <div class="chips" id="chips" role="group" aria-label="Filters">${chipsHtml()}</div>
@@ -629,18 +616,25 @@
       <div class="cards">${items.map(cardHtml).join('')}</div>`;
   }
 
+  // Short version for the list: "280 cal | 18g protein", plus "/bite" etc. when it isn't per serving.
+  function cardNutrition(n) {
+    const per = String(n.per || 'serving').replace(/\s*\(.*\)\s*/, '').trim();
+    const parts = [`${fmtN(n.calories)} cal`];
+    if (n.protein_g != null) parts.push(`${fmtN(n.protein_g)}g protein`);
+    return parts.join(' | ') + (per && per !== 'serving' ? `/${per}` : '');
+  }
+
   function cardHtml(r) {
     const fav = S.favorites.includes(r._id);
     const time = cardTime(r);
     return `<article class="card">
       <a class="card-link" href="#/r/${encodeURIComponent(r._id)}">
         <h2>${esc(r.title)}</h2>
-        <p class="meta">
-          ${time ? `<span>${I.clock}${esc(time)}</span>` : ''}
-          ${r.servings ? `<span>${I.serves}${esc(r.servings)}</span>` : ''}
-        </p>
-        ${r.nutrition ? `<p class="nut">${esc(nutritionSummary(r.nutrition))}</p>` : ''}
-        ${r.tags?.length ? `<div class="tags">${r.tags.map((t) => `<span class="tag">${esc(cap(t))}</span>`).join('')}</div>` : ''}
+        <div class="card-line">
+          ${time ? `<span class="card-time">${I.clock}${esc(time)}</span>` : ''}
+          ${r.nutrition?.calories != null ? `<span class="card-nut">${esc(cardNutrition(r.nutrition))}</span>` : ''}
+          ${(r.tags || []).map((t) => `<span class="tag">${esc(cap(t))}</span>`).join('')}
+        </div>
       </a>
       <button class="icon-btn fav ${fav ? 'on' : ''}" data-a="fav" data-id="${esc(r._id)}" aria-pressed="${fav}" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${I.heart}</button>
     </article>`;
@@ -655,14 +649,9 @@
     document.title = r.title;
     const f = ui.scale[id] || 1;
     const fav = S.favorites.includes(id);
-    const checks = new Set(S.checks[id] || []);
     const n = r.nutrition;
-    const inList = S.shopping[id] != null;
     const times = [['Prep', r.prep_time], ['Cook', r.cook_time], ['Total', r.total_time]].filter(([, v]) => v);
-    let host = '';
     const safeUrl = /^https?:\/\//i.test(r.source_url || '') ? r.source_url : '';
-    if (safeUrl) { try { host = new URL(safeUrl).hostname.replace(/^www\./, ''); } catch { /* ignore */ } }
-    const srcName = r.source_name || host;
 
     app.innerHTML = `
       <header class="top">
@@ -683,36 +672,22 @@
         ${f !== 1 && n && !isWholeRecipe(n.per) && n.calories != null ? `<p class="nut-note">Nutrition is per ${esc(n.per || 'serving')}, so it stays the same when scaling.</p>` : ''}
 
         <div class="scaler">
-          <span class="lbl">Scale</span>
           <div class="seg" role="group" aria-label="Scale recipe">
             ${SCALES.map((s) => `<button data-a="scale" data-id="${esc(id)}" data-s="${s}" aria-pressed="${s === f}">${s === 0.5 ? '½' : s}×</button>`).join('')}
           </div>
+          <button class="btn primary cook-btn" data-a="cook" data-id="${esc(id)}" ${r.instructions.length ? '' : 'disabled'}>${I.flame}Cook mode</button>
         </div>
 
-        <div class="actions">
-          <button class="btn primary" data-a="cook" data-id="${esc(id)}" ${r.instructions.length ? '' : 'disabled'}>${I.flame}Cook mode</button>
-          <button class="btn" data-a="shop-add" data-id="${esc(id)}">${inList && S.shopping[id] === f ? I.check + 'On list' : I.cart + (inList ? `Update list (${fmtN(f)}×)` : 'Add to list')}</button>
-        </div>
-
-        <div class="section-h">
-          <h2>Ingredients</h2>
-          ${checks.size ? `<button class="linkish" data-a="uncheck" data-id="${esc(id)}">Uncheck all</button>` : ''}
-        </div>
+        <div class="section-h"><h2>Ingredients</h2></div>
         ${ingredientGroups(r).map((g) => `
           ${g.label ? `<h3 class="sub">${esc(g.label)}</h3>` : ''}
-          <ul class="checklist">
-            ${g.items.map((it) => `<li><label class="check">
-              <input type="checkbox" data-ck="${esc(it.ck)}" data-id="${esc(id)}" ${checks.has(it.ck) ? 'checked' : ''}>
-              <span class="txt">${esc(scaleText(it.text, f))}</span></label></li>`).join('')}
-          </ul>`).join('') || '<p class="hint">No ingredients yet.</p>'}
+          <ul class="ing-list">${g.items.map((it) => `<li>${esc(scaleText(it.text, f))}</li>`).join('')}</ul>`).join('') || '<p class="hint">No ingredients yet.</p>'}
         ${f !== 1 ? '<p class="hint">Amounts written inside the steps aren\'t scaled.</p>' : ''}
 
         <div class="section-h"><h2>Instructions</h2></div>
-        <ol class="steps">${r.instructions.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+        <ol class="steps">${(() => { const re = ingredientRegex(r); return r.instructions.map((s) => `<li>${withPills(s, re)}</li>`).join(''); })()}</ol>
 
-        ${srcName || r.author ? `<p class="source">Source:
-          ${safeUrl ? `<a href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(srcName)}</a>` : esc(srcName)}
-          ${r.author ? `${srcName ? ' · ' : ''}${esc(r.author)}` : ''}</p>` : ''}
+        ${safeUrl ? `<p class="source">Source: <a href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(safeUrl)}</a></p>` : ''}
       </article>`;
   }
 
@@ -765,7 +740,7 @@
       <p class="cook-status" id="cook-status"></p>
       <div class="cook-body" data-a="cook-tap">
         <p class="cook-n">Step ${i + 1} of ${steps.length}</p>
-        <p class="cook-step" aria-live="polite">${esc(steps[i])}</p>
+        <p class="cook-step" aria-live="polite">${withPills(steps[i], ingredientRegex(r))}</p>
       </div>
       <div class="cook-nav">
         <button class="btn" data-a="cook-prev" ${i === 0 ? 'disabled' : ''}>Back</button>
@@ -887,9 +862,7 @@
 
         <section class="fieldset">
           <h2>Source</h2>
-          ${field('source_name', 'Source name')}
-          ${field('source_url', 'Source URL', 'type="url" inputmode="url" autocapitalize="none"')}
-          ${field('author', 'Author')}
+          ${field('source_url', 'Source URL', 'type="url" inputmode="url" autocapitalize="none" placeholder="https://…"')}
         </section>
 
         ${isNew ? '' : `<button type="button" class="btn danger block" style="margin-top:20px" data-a="delete-recipe">Delete recipe</button>`}
@@ -954,62 +927,6 @@
   }
 
   /* =========================================================================
-     Shopping list
-     ========================================================================= */
-  function viewShop() {
-    document.title = 'Shopping list';
-    const ids = Object.keys(S.shopping).filter(findRecipe);
-    const groups = buildShoppingList();
-    const checkedCount = Object.keys(S.shopChecks).length;
-    app.innerHTML = `
-      <header class="top"><h1 class="page-title">Shopping list</h1>
-        ${ids.length ? `<button class="icon-btn" data-a="shop-share" aria-label="Share or copy list"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 13v7h14v-7"/></svg></button>` : ''}
-      </header>
-      ${ids.length ? `
-        <section class="panel">
-          <h2>Recipes</h2>
-          <ul class="plain">
-            ${ids.map((id) => {
-              const r = findRecipe(id);
-              return `<li><span class="grow"><a href="#/r/${encodeURIComponent(id)}">${esc(r.title)}</a></span>
-                <select data-shop-mult="${esc(id)}" aria-label="Batch size for ${esc(r.title)}">
-                  ${SCALES.map((s) => `<option value="${s}" ${s === S.shopping[id] ? 'selected' : ''}>${s === 0.5 ? '½' : s}×</option>`).join('')}
-                </select>
-                <button class="icon-btn" data-a="shop-remove" data-id="${esc(id)}" aria-label="Remove ${esc(r.title)}">${I.x}</button></li>`;
-            }).join('')}
-          </ul>
-          <button class="btn small block add-row" data-a="pick-recipes">${I.plus}Add recipes</button>
-        </section>
-        <div id="picker"></div>
-        ${groups.map((g) => `
-          <h3 class="sub">${esc(g.label)}</h3>
-          <ul class="checklist">${g.items.map((it) => `<li><label class="check">
-            <input type="checkbox" data-sck="${esc(it.key)}" ${S.shopChecks[it.key] ? 'checked' : ''}>
-            <span class="txt">${esc(it.text)}${it.detail ? `<span class="from">${esc(it.detail)}</span>` : ''}<span class="from">${esc(it.from)}</span></span>
-          </label></li>`).join('')}</ul>`).join('')}
-        <div class="actions">
-          <button class="btn" data-a="shop-uncheck" ${checkedCount ? '' : 'disabled'}>Uncheck all</button>
-          <button class="btn danger" data-a="shop-clear">Clear list</button>
-        </div>`
-      : `<div class="empty"><p>Your shopping list is empty.</p><p>Choose recipes below, or tap <b>Add to list</b> on a recipe.</p></div>
-         <div id="picker"></div>`}`;
-    if (!ids.length) renderPicker();
-  }
-
-  function renderPicker() {
-    const el = $('#picker');
-    if (!el) return;
-    const options = S.recipes.filter((r) => S.shopping[r._id] == null);
-    el.innerHTML = options.length ? `<section class="panel"><h2>Pick recipes</h2>
-      <ul class="plain">${options.map((r) => `<li><span class="grow">${esc(r.title)}<small>${esc(r.servings || '')}</small></span>
-        <button class="btn small" data-a="shop-pick" data-id="${esc(r._id)}">${I.plus}Add</button></li>`).join('')}</ul></section>` : '';
-  }
-
-  function shoppingText() {
-    return buildShoppingList().map((g) => `${g.label}\n${g.items.map((it) => `${S.shopChecks[it.key] ? '✓' : '•'} ${it.text}`).join('\n')}`).join('\n\n');
-  }
-
-  /* =========================================================================
      Pantry essentials
      ========================================================================= */
   function viewPantry() {
@@ -1035,9 +952,9 @@
      Backup / import / settings
      ========================================================================= */
   function viewMore() {
-    document.title = 'Backup & settings';
+    document.title = 'Settings';
     app.innerHTML = `
-      <header class="top"><h1 class="page-title">Backup</h1></header>
+      <header class="top"><h1 class="page-title">Settings</h1></header>
       ${syncPanelHtml()}
       <section class="panel">
         <h2>Export</h2>
@@ -1126,13 +1043,6 @@
     else document.documentElement.dataset.theme = t;
   }
 
-  function updateBadge() {
-    const b = $('#shop-badge');
-    const n = S ? Object.keys(S.shopping).filter((id) => findRecipe(id)).length : 0;
-    b.hidden = !n;
-    b.textContent = n;
-  }
-
   /* =========================================================================
      Actions (event delegation)
      ========================================================================= */
@@ -1159,35 +1069,11 @@
       ui.scale[el.dataset.id] = +el.dataset.s;
       rerender(() => viewRecipe(el.dataset.id));
     },
-    uncheck(el) { delete S.checks[el.dataset.id]; save(); rerender(() => viewRecipe(el.dataset.id)); },
     cook(el) { openCook(el.dataset.id); },
     'cook-close'() { closeCook(); },
     'cook-next'() { cookGo(1); },
     'cook-prev'() { cookGo(-1); },
     'cook-tap'() { if (!wakeLock) requestWake(); },
-    'shop-add'(el) {
-      const id = el.dataset.id, f = ui.scale[id] || 1;
-      if (S.shopping[id] === f) { location.hash = '#/shop'; return; }
-      S.shopping[id] = f;
-      save();
-      toast(`Added to shopping list${f !== 1 ? ` (${fmtN(f)}×)` : ''}`);
-      rerender(() => viewRecipe(id));
-    },
-    'shop-remove'(el) { delete S.shopping[el.dataset.id]; save(); rerender(viewShop); },
-    'shop-pick'(el) { S.shopping[el.dataset.id] = 1; save(); rerender(viewShop); },
-    'pick-recipes'(el) { el.remove(); renderPicker(); $('#picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
-    'shop-uncheck'() { S.shopChecks = {}; save(); rerender(viewShop); },
-    'shop-clear'() {
-      if (!confirm('Clear the whole shopping list?')) return;
-      S.shopping = {}; S.shopChecks = {}; save(); viewShop();
-    },
-    async 'shop-share'() {
-      const text = shoppingText();
-      try {
-        if (navigator.share) await navigator.share({ title: 'Shopping list', text });
-        else { await navigator.clipboard.writeText(text); toast('Shopping list copied'); }
-      } catch { /* user cancelled */ }
-    },
     'pantry-del'(el) {
       const p = S.pantry_essentials[+el.dataset.i];
       S.pantry_essentials.splice(+el.dataset.i, 1);
@@ -1244,7 +1130,6 @@
       if (!r || !confirm(`Delete “${r.title}”? Export a backup first if you might want it back.`)) return;
       S.recipes = S.recipes.filter((x) => x._id !== r._id);
       S.favorites = S.favorites.filter((x) => x !== r._id);
-      delete S.shopping[r._id]; delete S.checks[r._id];
       save();
       ui.draft = null; ui.dirty = false;
       toast('Recipe deleted');
@@ -1292,23 +1177,6 @@
 
   document.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.dataset.ck) {
-      const id = t.dataset.id;
-      const set = new Set(S.checks[id] || []);
-      t.checked ? set.add(t.dataset.ck) : set.delete(t.dataset.ck);
-      S.checks[id] = [...set];
-      if (!set.size) delete S.checks[id];
-      save();
-      return;
-    }
-    if (t.dataset.sck) {
-      t.checked ? (S.shopChecks[t.dataset.sck] = true) : delete S.shopChecks[t.dataset.sck];
-      save();
-      const btn = $('[data-a="shop-uncheck"]');
-      if (btn) btn.disabled = !Object.keys(S.shopChecks).length;
-      return;
-    }
-    if (t.dataset.shopMult) { S.shopping[t.dataset.shopMult] = +t.value; save(); rerender(viewShop); return; }
     if (t.dataset.ingCat != null && ui.draft) { ui.draft.ing[+t.dataset.ingCat].cat = t.value; ui.dirty = true; return; }
     if (t.id === 'import-file' && t.files[0]) {
       const mode = t.dataset.mode;
@@ -1383,7 +1251,6 @@
       catch (err) { S = blankState(); S.pantry_essentials = ['olive oil']; seedError = err.message; }
     }
     applyTheme();
-    updateBadge();
     window.addEventListener('hashchange', route);
     route();
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
@@ -1393,6 +1260,6 @@
   }
 
   // Exposed for quick checks in the console; not used by the app.
-  window.__recipeApp = { scaleText, parseIngredient, parseRecipeText, guessCategory, buildShoppingList: () => buildShoppingList() };
+  window.__recipeApp = { scaleText, parseIngredient, parseRecipeText, guessCategory, ingredientTerms };
   init();
 })();

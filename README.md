@@ -3,12 +3,11 @@
 A recipe box web app you can install on your phone's home screen. It's plain HTML, CSS, and JavaScript with no build step, and it works offline.
 
 - **Recipes:** search by title or ingredient, filter by tag or favorites
-- **Recipe page:** ingredients grouped Protein → Produce → Shelf → Seasonings → Pantry Essentials, with tap-to-check boxes. Scale to ½×, 1×, 2×, or 3×.
+- **Recipe page:** ingredients grouped Protein → Produce → Shelf → Seasonings → Pantry Essentials. Scale to ½×, 1×, 2×, or 3×. Ingredient names in the steps are highlighted.
 - **Cook mode:** big text, one step at a time, screen kept on
-- **Shopping list:** built from the recipes you pick, with matching ingredients merged
 - **Pantry Essentials:** things you always have on hand. Adding one moves matching ingredients into that group.
-- **Sync:** sign in once per device and recipes, favorites, pantry, and the shopping list stay the same everywhere
-- **Backup:** export and import JSON to back up or move between devices
+- **Sync:** sign in once per device and recipes, favorites, and pantry essentials stay the same everywhere
+- **Settings:** sync sign-in, appearance, and JSON export/import to back up or move between devices
 
 ## Files
 
@@ -24,7 +23,7 @@ A recipe box web app you can install on your phone's home screen. It's plain HTM
 
 The first time the app opens on a device, it copies `recipes.json` and `pantry_essentials.json` into the browser's storage (localStorage). Every add, edit, favorite, and checkbox is saved there, so the app works offline.
 
-**Sync:** on the Backup tab, sign in with your Card Deals email and password. The app then keeps recipes, favorites, pantry essentials, and the shopping list in Firebase under your account (`users/<your id>/recipes` and `users/<your id>/recipeMeta`) and mirrors them on every signed-in device. Changes made offline sync when the device reconnects. Ingredient checkmarks and the light/dark setting stay per device.
+**Sync:** on the Settings tab, sign in with your Card Deals email and password. The app then keeps recipes, favorites, and pantry essentials in Firebase under your account (`users/<your id>/recipes` and `users/<your id>/recipeMeta`) and mirrors them on every signed-in device. Changes made offline sync when the device reconnects. The light/dark setting stays per device.
 
 The first time you sign in on a device, anything only on that device (by title) is added to your account, so nothing is lost. After that, your account wins: a recipe deleted on one device disappears from the others.
 
@@ -41,10 +40,10 @@ service cloud.firestore {
 }
 ```
 
-If the Backup tab says Firebase refused to save recipes, paste that into Firebase console → Firestore Database → Rules and click **Publish**.
+If the Settings tab says Firebase refused to save recipes, paste that into Firebase console → Firestore Database → Rules and click **Publish**.
 
-- **Back up or move without signing in:** Backup tab → **Export full backup**. On the other device, **Import and merge** (or **replace**).
-- **Update the repo copy:** Backup tab → **Export recipes.json only**. Replace `recipes.json` in the repo with that file and push.
+- **Back up or move without signing in:** Settings tab → **Export full backup**. On the other device, **Import and merge** (or **replace**).
+- **Update the repo copy:** Settings tab → **Export recipes.json only**. Replace `recipes.json` in the repo with that file and push.
 
 > If you're not signed in, clearing Safari's website data deletes the on-device copy, so export a backup now and then.
 
@@ -84,11 +83,11 @@ If the Backup tab says Firebase refused to save recipes, paste that into Firebas
 
 Notes:
 - `ingredients` can also be a plain list of strings: `["1 cup milk", "Pinch of salt"]`.
-- Put a number first (`1½ cups`, `15–20 g`, `2 to 3`) so scaling and the shopping list can do the math.
+- Put a number first (`1½ cups`, `15–20 g`, `2 to 3`) so scaling can do the math.
 - If the nutrition numbers are for the whole batch, include "entire recipe" in `per`, for example `"pint (entire recipe)"`. Scaling then multiplies the totals. Per-serving numbers stay the same when scaling.
 - `tags` power the filter chips. The current ones are `under 30 min`, `high protein`, `breakfast`, `dinner`, `snack`, `dessert`, `meal prep`, and `ninja creami`. Any new tag becomes a chip automatically.
 
-The app only reads `recipes.json` the very first time it opens on a device. To get a recipe you added to the file into the app, import the file: Backup tab → **Import and merge** (it adds new titles and updates matching ones).
+The app only reads `recipes.json` the very first time it opens on a device. To get a recipe you added to the file into the app, import the file: Settings tab → **Import and merge** (it adds new titles and updates matching ones).
 
 ## Try it on your computer
 

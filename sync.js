@@ -12,7 +12,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 
-const META = ['pantry', 'favorites', 'shopping'];
+const META = ['pantry', 'favorites'];
 
 // JSON with sorted keys, so the same data always compares equal.
 function stable(v) {
@@ -24,7 +24,7 @@ function stable(v) {
 /**
  * hooks:
  *   getState()            → the app's current state object
- *   onRemote(remote, first) → apply data from Firestore ({recipes, pantry, favorites, shopping});
+ *   onRemote(remote, first) → apply data from Firestore ({recipes, pantry, favorites});
  *                           `first` is true for the first full load after sign-in
  *   onStatus(status)      → {signedIn, email, uid, state: 'signed-out'|'loading'|'synced'|'offline'|'error', error?}
  */
@@ -106,7 +106,6 @@ export function start(hooks) {
     });
     out.set('recipeMeta/pantry', { items: [...S.pantry_essentials] });
     out.set('recipeMeta/favorites', { ids: [...S.favorites] });
-    out.set('recipeMeta/shopping', { recipes: { ...S.shopping }, checked: { ...S.shopChecks } });
     return out;
   }
 
