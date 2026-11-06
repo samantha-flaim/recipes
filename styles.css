@@ -350,3 +350,7 @@ details.paste textarea { min-height: 160px; }
 .cook-next-step b { color: var(--label); font-weight: 600; margin-right: 4px; }
 .cook-next-step .ing { padding: 0 4px; font-weight: 500; }
 .cook-body { justify-content: flex-start; padding-top: 28px; }
+
+/* ---------- Recipe notes ---------- */
+.notes textarea { min-height: 110px; }
+.notes .hint { margin-top: 4px; }

@@ -17,7 +17,7 @@
   const CATEGORY_ORDER = ['breakfast', 'lunch/dinner', 'dinner', 'snack', 'dessert'];
   const SCALES = [0.5, 1, 2, 3];
   const RECIPE_KEYS = ['title', 'category', 'source_name', 'source_url', 'author', 'description', 'prep_time', 'cook_time',
-    'total_time', 'servings', 'ingredients', 'instructions', 'nutrition', 'tags'];
+    'total_time', 'servings', 'ingredients', 'instructions', 'nutrition', 'notes', 'tags'];
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const app = $('#app');
@@ -258,7 +258,7 @@
     if (view === 'edit' || view === 'new' || view === 'more') return;
     if (ui.cook) { if (findRecipe(ui.cook.id)) renderCook(); else closeCook(); }
     const typing = app.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-    if (view === 'r') rerender(() => viewRecipe(decodeURIComponent(id || '')));
+    if (view === 'r') { if (!typing) rerender(() => viewRecipe(decodeURIComponent(id || ''))); }
     else if (view === 'cooked') rerender(viewCookedList);
     else if (view === 'c') { if (!typing) rerender(() => viewCookLog(decodeURIComponent(id || ''))); }
     else if ($('#list')) {
@@ -815,6 +815,13 @@
               </a>
               <button class="btn small" data-a="cook-again" data-id="${esc(c._id)}">Cook again</button></li>`).join('')}</ul>`;
         })()}
+
+        <div class="section-h"><h2>Notes</h2></div>
+        <div class="form notes">
+          <label for="r-notes" class="sr-only">Notes for ${esc(r.title)}</label>
+          <textarea id="r-notes" data-rnote="${esc(id)}" placeholder="Tips, swaps, what to try next time…">${esc(r.notes || '')}</textarea>
+          <p class="hint">Saves as you type.</p>
+        </div>
 
         ${safeUrl ? `<p class="source">Source: <a href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(safeUrl)}</a></p>` : ''}
       </article>`;
@@ -1675,6 +1682,11 @@
   document.addEventListener('input', (e) => {
     const t = e.target;
     if (t.id === 'q') { ui.q = t.value; renderList(); return; }
+    if (t.dataset.rnote) {
+      const r = findRecipe(t.dataset.rnote);
+      if (r) { r.notes = t.value; saveSoon(); }
+      return;
+    }
     if (t.dataset.cf) {
       const c = findCooked(location.hash.split('/')[2] ? decodeURIComponent(location.hash.split('/')[2]) : '');
       if (c) { c[t.dataset.cf] = t.value; saveSoon(); }
