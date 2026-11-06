@@ -1,6 +1,6 @@
 // Offline support: try the network first (so updates show up right away), fall back to
 // the cache when offline or when the network is slow. Bump CACHE if files are added or renamed.
-const CACHE = 'recipes-v4';
+const CACHE = 'recipes-v5';
 const NETWORK_TIMEOUT_MS = 3000;
 const ASSETS = [
   './',

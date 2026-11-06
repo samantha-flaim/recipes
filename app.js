@@ -49,6 +49,28 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
   };
 
+  // In-app confirmation box. The browser's own confirm() popup is blocked in some
+  // browsers and app views, which made buttons like Cancel silently do nothing.
+  function ask(message, okLabel = 'OK', danger = false) {
+    return new Promise((resolve) => {
+      const m = $('#modal');
+      m.innerHTML = `<div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="modal-msg">
+        <p id="modal-msg">${esc(message)}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="modal-cancel">${okLabel === 'Discard' ? 'Keep editing' : 'Cancel'}</button>
+          <button type="button" class="btn ${danger ? 'danger-fill' : 'primary'}" id="modal-ok">${esc(okLabel)}</button>
+        </div></div>`;
+      m.hidden = false;
+      const done = (v) => { m.hidden = true; m.innerHTML = ''; document.removeEventListener('keydown', onKey, true); resolve(v); };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+      document.addEventListener('keydown', onKey, true);
+      $('#modal-ok').onclick = () => done(true);
+      $('#modal-cancel').onclick = () => done(false);
+      m.onclick = (e) => { if (e.target === m) done(false); };
+      $('#modal-ok').focus();
+    });
+  }
+
   let toastTimer;
   function toast(msg) {
     const t = $('#toast');
@@ -469,6 +491,57 @@
     }
     return out + esc(text.slice(last));
   }
+  /* =========================================================================
+     Prep: knife and grater work pulled from the ingredient list, e.g.
+     "Cherry tomatoes, halved" → "Halve cherry tomatoes"
+     ========================================================================= */
+  const PREP_VERBS = {
+    chopped: 'chop', diced: 'dice', minced: 'mince', sliced: 'slice', halved: 'halve', quartered: 'quarter',
+    cubed: 'cube', grated: 'grate', shredded: 'shred', peeled: 'peel', julienned: 'julienne', trimmed: 'trim',
+    zested: 'zest', juiced: 'juice', crumbled: 'crumble', cored: 'core', seeded: 'seed', smashed: 'smash',
+    torn: 'tear', mashed: 'mash', spiralized: 'spiralize', crushed: 'crush', pitted: 'pit',
+  };
+  const PREP_ADVERBS = new Set(['finely', 'roughly', 'coarsely', 'thinly', 'thickly']);
+  // Prep words written before the name ("¼ cup minced cilantro"). Only a few, so store-bought
+  // items like "crushed red pepper" or "pitted dates" aren't turned into tasks.
+  const PREP_PREFIX = /\b(?:(finely|roughly|coarsely|thinly|freshly)\s+)?(minced|chopped|sliced|julienned|grated)\s+/i;
+
+  function prepStep(text) {
+    const comma = text.search(/,(?![^(]*\))/);
+    let obj = (comma >= 0 ? text.slice(0, comma) : text).trim();
+    const rest = comma >= 0 ? text.slice(comma + 1).trim() : '';
+    const optional = /\boptional\b/i.test(text);
+    const cut = rest.match(/^(?:(?:finely|roughly|thinly)\s+)?cut into ([^,(]+)/i);
+    let verb = '';
+    if (cut) verb = 'cut';
+    else if (rest) {
+      const words = [];
+      for (const w of rest.replace(/\([^)]*\)/g, ' ').split(/\s+/).filter(Boolean)) {
+        const lw = w.toLowerCase().replace(/[^a-z]/g, '');
+        if (PREP_VERBS[lw]) words.push(PREP_VERBS[lw]);
+        else if (PREP_ADVERBS.has(lw) || lw === 'and' || lw === 'or') words.push(lw);
+        else break;
+      }
+      while (words.length && /^(and|or)$/.test(words[words.length - 1])) words.pop();
+      if (words.some((w) => Object.values(PREP_VERBS).includes(w))) verb = words.join(' ');
+    }
+    if (!verb && !/\bcans?\b|\bjars?\b|\(\s*\d+(\.\d+)?\s*oz\s*\)/i.test(obj)) {
+      const m = obj.match(PREP_PREFIX);
+      if (m) {
+        verb = `${m[1] && m[1].toLowerCase() !== 'freshly' ? `${m[1].toLowerCase()} ` : ''}${PREP_VERBS[m[2].toLowerCase()]}`;
+        obj = obj.replace(m[0], '').trim();
+      }
+    }
+    if (!verb) return null;
+    obj = obj.replace(/\s*\((?:optional)\)\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (/^[A-Z][a-z]/.test(obj)) obj = obj[0].toLowerCase() + obj.slice(1);
+    const line = cut ? `Cut ${obj} into ${cut[1].trim()}` : `${verb} ${obj}`;
+    return cap(line) + (optional ? ' (optional)' : '');
+  }
+  // Prep steps for a recipe or cook (anything with .ingredients), at a given scale.
+  const prepSteps = (src, f = 1) => ingredientGroups(src).flatMap((g) => g.items)
+    .map((it) => prepStep(scaleText(it.text, f))).filter(Boolean);
+
 
   /* =========================================================================
      Ingredient name parsing
@@ -709,9 +782,9 @@
           <div class="seg" role="group" aria-label="Scale recipe">
             ${SCALES.map((s) => `<button data-a="scale" data-id="${esc(id)}" data-s="${s}" aria-pressed="${s === f}">${s === 0.5 ? '½' : s}×</button>`).join('')}
           </div>
-          <button class="btn primary cook-btn" data-a="cook" data-id="${esc(id)}" ${r.instructions.length ? '' : 'disabled'}>${I.flame}Cook mode</button>
+          <button class="btn primary cook-btn" data-a="cook" data-id="${esc(id)}" ${r.instructions.length ? '' : 'disabled'} aria-label="Cook mode">${I.flame}Cook</button>
+          <button class="btn cook-btn" data-a="cook-start" data-id="${esc(id)}" aria-label="Log a cook${f !== 1 ? ` at ${fmtN(f)}×` : ''}">${I.plus}Log</button>
         </div>
-        <button class="btn block log-btn" data-a="cook-start" data-id="${esc(id)}">${I.plus}Log a cook${f !== 1 ? ` (${fmtN(f)}×)` : ''}</button>
 
         <div class="section-h"><h2>Ingredients</h2></div>
         ${ingredientGroups(r).map((g) => `
@@ -720,7 +793,15 @@
         ${f !== 1 ? '<p class="hint">Amounts written inside the steps aren\'t scaled.</p>' : ''}
 
         <div class="section-h"><h2>Instructions</h2></div>
-        <ol class="steps">${(() => { const re = ingredientRegex(r); return r.instructions.map((s) => `<li>${withPills(s, re)}</li>`).join(''); })()}</ol>
+        ${(() => {
+          const re = ingredientRegex(r);
+          const prep = prepSteps(r, f);
+          const steps = `<ol class="steps">${r.instructions.map((s) => `<li>${withPills(s, re)}</li>`).join('')}</ol>`;
+          if (!prep.length) return steps;
+          return `<h3 class="sub">Prep</h3>
+            <ul class="ing-list prep-list">${prep.map((p) => `<li>${withPills(p, re)}</li>`).join('')}</ul>
+            <h3 class="sub">Cook</h3>${steps}`;
+        })()}
 
         ${(() => {
           const hist = cooksOf(id);
@@ -774,11 +855,21 @@
     wakeLock?.release?.().catch(() => {});
     wakeLock = null;
   }
-  function renderCook() {
+  // Cook mode screens: a Prep screen (when there is prep) followed by each step.
+  function cookScreens() {
     const r = findRecipe(ui.cook.id);
-    const steps = r.instructions;
+    const src = (ui.cook.cookId && findCooked(ui.cook.cookId)) || r;
+    const prep = prepSteps(src, ui.cook.cookId ? 1 : ui.scale[r._id] || 1);
+    return { r, src, prep, screens: [...(prep.length ? [{ prep }] : []), ...r.instructions.map((text) => ({ text }))] };
+  }
+  function renderCook() {
+    const { r, src, prep, screens } = cookScreens();
+    const steps = screens;
     const i = ui.cook.step;
     const last = i === steps.length - 1;
+    const cur = screens[i];
+    const re = ingredientRegex(src);
+    const stepNo = i + 1 - (prep.length ? 1 : 0), stepCount = r.instructions.length;
     $('#cook').innerHTML = `
       <div class="cook-top">
         <span class="t">${esc(r.title)}</span>
@@ -787,18 +878,26 @@
       <div class="cook-progress" aria-hidden="true">${steps.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>
       <p class="cook-status" id="cook-status"></p>
       <div class="cook-body" data-a="cook-tap">
-        <p class="cook-n">Step ${i + 1} of ${steps.length}</p>
-        <p class="cook-step" aria-live="polite">${withPills(steps[i], ingredientRegex((ui.cook.cookId && findCooked(ui.cook.cookId)) || r))}</p>
+        ${cur.prep
+          ? `<p class="cook-n">Prep</p><ul class="cook-prep" aria-live="polite">${cur.prep.map((p) => `<li>${withPills(p, re)}</li>`).join('')}</ul>`
+          : `<p class="cook-n">Step ${stepNo} of ${stepCount}</p><p class="cook-step" aria-live="polite">${withPills(cur.text, re)}</p>`}
+        ${(() => {
+          const next = screens.slice(i + 1, i + 3);
+          if (!next.length) return '';
+          const first = i + 2 - (prep.length ? 1 : 0);
+          return `<div class="cook-next"><p class="cook-next-h">Up next</p>${next.map((sc, k) =>
+            `<p class="cook-next-step"><b>Step ${first + k}</b> ${withPills(sc.text, re)}</p>`).join('')}</div>`;
+        })()}
       </div>
       <div class="cook-nav">
         <button class="btn" data-a="cook-prev" ${i === 0 ? 'disabled' : ''}>Back</button>
-        <button class="btn primary" data-a="${last ? 'cook-close' : 'cook-next'}">${last ? 'Done' : 'Next step'}</button>
+        <button class="btn primary" data-a="${last ? 'cook-close' : 'cook-next'}">${last ? 'Done' : cur.prep ? 'Start cooking' : 'Next step'}</button>
       </div>`;
     renderCookStatus();
   }
   function cookGo(d) {
     if (!ui.cook) return;
-    const n = findRecipe(ui.cook.id).instructions.length;
+    const n = cookScreens().screens.length;
     const next = Math.min(n - 1, Math.max(0, ui.cook.step + d));
     if (next !== ui.cook.step) { ui.cook.step = next; renderCook(); }
   }
@@ -1401,16 +1500,16 @@
       renderEdit();
       toast(`Found ${p.ing.length} ingredients and ${p.steps.length} steps. Check the groups before saving.`);
     },
-    'cancel-edit'(el, e) {
+    async 'cancel-edit'(el, e) {
       e.preventDefault();
-      if (ui.dirty && !confirm('Discard your changes?')) return;
+      if (ui.dirty && !(await ask('Discard your changes?', 'Discard', true))) return;
       const id = ui.draft?.id;
       ui.draft = null; ui.dirty = false;
       location.hash = id ? `#/r/${encodeURIComponent(id)}` : '#/';
     },
-    'delete-recipe'() {
+    async 'delete-recipe'() {
       const r = findRecipe(ui.draft.id);
-      if (!r || !confirm(`Delete “${r.title}”? Export a backup first if you might want it back.`)) return;
+      if (!r || !(await ask(`Delete “${r.title}”? Export a backup first if you might want it back.`, 'Delete', true))) return;
       S.recipes = S.recipes.filter((x) => x._id !== r._id);
       S.favorites = S.favorites.filter((x) => x !== r._id);
       save();
@@ -1526,10 +1625,10 @@
       await calcCookNutrition(c);
     },
     'cook-nutrition'(el) { calcCookNutrition(findCooked(el.dataset.id)); },
-    'cook-to-recipe'(el) {
+    async 'cook-to-recipe'(el) {
       const c = findCooked(el.dataset.id);
       const r = findRecipe(c.recipe_id);
-      if (!r || !confirm(`Replace the ingredients and servings in “${r.title}” with this cook's? Past cooks keep their own copies.`)) return;
+      if (!r || !(await ask(`Replace the ingredients and servings in “${r.title}” with this cook's? Past cooks keep their own copies.`, 'Replace'))) return;
       r.ingredients = clone(c.ingredients);
       r.servings = c.servings || r.servings;
       if (c.nutrition?.calories != null) r.nutrition = clone(c.nutrition);
@@ -1538,9 +1637,9 @@
       toast('Recipe updated');
       location.hash = `#/r/${encodeURIComponent(r._id)}`;
     },
-    'cook-delete'(el) {
+    async 'cook-delete'(el) {
       const c = findCooked(el.dataset.id);
-      if (!confirm(`Delete this cook of “${c.recipe_title}” from ${fmtDate(c.date)}?`)) return;
+      if (!(await ask(`Delete this cook of “${c.recipe_title}” from ${fmtDate(c.date)}?`, 'Delete', true))) return;
       S.cooks = S.cooks.filter((x) => x._id !== c._id);
       save();
       toast('Cook deleted');
@@ -1609,10 +1708,10 @@
     if (t.dataset.ingCat != null && ui.draft) { ui.draft.ing[+t.dataset.ingCat].cat = t.value; ui.dirty = true; return; }
     if (t.id === 'import-file' && t.files[0]) {
       const mode = t.dataset.mode;
-      t.files[0].text().then((txt) => {
+      t.files[0].text().then(async (txt) => {
         let data;
         try { data = JSON.parse(txt); } catch { throw new Error('That file isn’t valid JSON.'); }
-        if (mode === 'replace' && !confirm('Replace all recipes on this device with this file?')) return;
+        if (mode === 'replace' && !(await ask('Replace all recipes on this device with this file?', 'Replace', true))) return;
         const { added, updated } = importData(data, mode);
         toast(`Imported: ${added} added, ${updated} updated`);
         viewMore();

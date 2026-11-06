@@ -5,7 +5,8 @@ A recipe box web app you can install on your phone's home screen. It's plain HTM
 - **Recipes:** grouped by category; search by title or ingredient, filter to favorites
 - **Recipe page:** ingredients grouped Protein → Produce → Shelf → Seasonings → Pantry Essentials. Scale to ½×, 1×, 2×, or 3×. Ingredient names in the steps are highlighted.
 - **Sync:** sign in once per device and recipes, favorites, and pantry essentials stay the same everywhere
-- **Cook mode:** big text, one step at a time with ingredient names highlighted, screen kept on
+- **Prep:** knife and grater work ("Halve cherry tomatoes", "Mince 4 cloves garlic") is pulled from ingredient wording like ", halved" or "minced" and listed above the steps
+- **Cook mode:** a Prep screen, then big text one step at a time with the next two steps previewed, ingredient names highlighted, screen kept on
 - **Cooked:** log each time you make a recipe — date, servings made, the ingredients you actually used, nutrition, a Bad / Neutral / Good rating, and a comment
 - **AI nutrition:** "Calculate with AI" on the edit screen asks Claude to estimate nutrition facts
 - **Settings:** sync sign-in, AI key, appearance, and JSON export/import to back up or move between devices
